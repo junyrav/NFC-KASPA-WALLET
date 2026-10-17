@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.nfckaspa.wallet"
     compileSdk = 35
+
     defaultConfig {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
@@ -14,6 +15,12 @@ android {
         versionCode = 1
         versionName = "0.1.0-testnet"
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     buildFeatures { compose = true }
     kotlinOptions { jvmTarget = "17" }
 }
