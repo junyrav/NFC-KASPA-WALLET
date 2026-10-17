@@ -12,8 +12,8 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.5.0-testnet"
+        versionCode = 6
+        versionName = "0.6.0-testnet"
     }
 
     compileOptions {
@@ -34,5 +34,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.biometric:biometric:1.1.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.82")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
