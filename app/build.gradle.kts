@@ -12,8 +12,8 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.6.5-testnet"
+        versionCode = 12
+        versionName = "0.6.6-testnet"
     }
 
     compileOptions {
