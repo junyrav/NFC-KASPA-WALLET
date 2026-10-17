@@ -77,7 +77,7 @@ private object Card{
 private object Tn10{
  suspend fun balance(address:String):String=withContext(Dispatchers.IO){
   val c=(URL("https://api-tn10.kaspa.org/addresses/$address/balance").openConnection() as HttpURLConnection).apply{connectTimeout=10000;readTimeout=10000;requestMethod="GET";setRequestProperty("Accept","application/json");setRequestProperty("User-Agent","NFC-KASPA-WALLET/0.6.2")}
-  try{val code=c.responseCode;val stream=if(code in 200..299)c.inputStream else c.errorStream;val body=stream?.bufferedReader()?.use{it.readText()}.orEmpty();if(code !in 200..299)throw IllegalStateException("HTTP $code ${body.take(120)}");val n=Regex("\"balance\"\s*:\s*(\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()?:throw IllegalStateException("balance 필드 없음: ${body.take(120)}");"%.8f KAS".format(n/100000000.0)}finally{c.disconnect()}
+  try{val code=c.responseCode;val stream=if(code in 200..299)c.inputStream else c.errorStream;val body=stream?.bufferedReader()?.use{it.readText()}.orEmpty();if(code !in 200..299)throw IllegalStateException("HTTP $code ${body.take(120)}");val n=Regex("\"balance\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()?:throw IllegalStateException("balance 필드 없음: ${body.take(120)}");"%.8f KAS".format(n/100000000.0)}finally{c.disconnect()}
  }
 }
 private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeFormat.QR_CODE,640,640);return Bitmap.createBitmap(640,640,Bitmap.Config.RGB_565).also{b->for(x in 0 until 640)for(y in 0 until 640)b.setPixel(x,y,if(m[x,y])android.graphics.Color.BLACK else android.graphics.Color.WHITE)}}
