@@ -31,7 +31,7 @@ class WalletUiTest {
             compose.onNodeWithText("지갑 시작하기").assertDoesNotExist()
             scenario.recreate()
             compose.onNodeWithText("내 지갑 잔액").assertIsDisplayed()
-            compose.onNodeWithText("거래내역",useUnmergedTree=true).performClick()
+            compose.onAllNodesWithText("거래내역",useUnmergedTree=true).last().performClick()
             compose.onNodeWithText("아직 제출한 거래가 없습니다").assertIsDisplayed()
             compose.onNodeWithText("카드관리",useUnmergedTree=true).performClick()
             compose.onNodeWithText("카드 관리").assertIsDisplayed()

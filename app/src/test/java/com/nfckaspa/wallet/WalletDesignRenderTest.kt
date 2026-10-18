@@ -1,6 +1,9 @@
 package com.nfckaspa.wallet
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
@@ -21,9 +24,14 @@ class WalletDesignRenderTest {
     @get:Rule val compose=createComposeRule()
     private fun capture(name:String) {
         compose.waitForIdle()
-        val bitmap=compose.onRoot().captureToImage().asAndroidBitmap()
-        val dir=File("build/visual-review").apply{mkdirs()}
-        File(dir,"$name.png").outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}
+        compose.runOnIdle {
+            val activity=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single()
+            val view=activity.window.decorView
+            val bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            val dir=File("build/visual-review").apply{mkdirs()}
+            File(dir,"$name.png").outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}
+        }
     }
     @Test fun renderFiveReferenceScreensAndReceive() {
         val address=KaspaAddress.testnet(ByteArray(32).apply{this[31]=1})
