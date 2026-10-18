@@ -287,7 +287,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 else scope.launch {
                                     var key:ByteArray?=null
                                     try {
-                                        val unlocked=Crypto.dailyDec(rec.daily)
+                                        val unlocked=try{Crypto.dailyDec(rec.daily)}catch(e:Exception){throw IllegalStateException("이 앱에서 카드 재등록이 필요합니다. 카드관리에서 카드 2장으로 잠금을 해제한 뒤 재등록하세요.",e)}
                                         key=unlocked
                                         check(KaspaAddress.testnet(unlocked)==address) { "현재 지갑의 카드가 아닙니다" }
                                         val p=prepared?:error("송금 준비가 만료되었습니다")

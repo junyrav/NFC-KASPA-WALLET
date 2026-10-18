@@ -63,3 +63,17 @@ jobs:
             app/build/test-results/testDebugUnitTest/
             app/build/reports/lint-results-debug.html
           if-no-files-found: warn
+
+      - name: Export APK verification tool
+        run: |
+          apk_signer_jar=$(rg --files "$ANDROID_HOME/build-tools" | rg '/lib/apksigner\.jar$' | sort -V | tail -n 1)
+          test -f "$apk_signer_jar"
+          mkdir -p app/build/verification-tools
+          cp "$apk_signer_jar" app/build/verification-tools/apksigner.jar
+
+      - name: Upload APK verification tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-verification-tool
+          path: app/build/verification-tools/apksigner.jar
+          if-no-files-found: error

@@ -171,6 +171,7 @@ private fun total(s:WalletVisualState):String = runCatching {
                 Text("NFC KASPA WALLET",Modifier.align(Alignment.CenterHorizontally),fontWeight=FontWeight.Bold,fontSize=23.sp,color=Ink)
                 Spacer(Modifier.height(10.dp))
                 WhiteCard {Text("지갑 시작하기",fontSize=22.sp,fontWeight=FontWeight.Bold);Text("새 지갑을 만들거나 NFC 카드 2장으로 기존 지갑을 복구하세요.",color=Muted)
+                    if(BuildConfig.APPLICATION_ID.endsWith(".preview")) Hint("기존 지갑은 카드로 복구하세요.","이 앱은 별도 설치형입니다. 기존 지갑이 있다면 새로 생성하지 마세요.")
                     OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),singleLine=true,enabled=!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
                     Primary("새 Testnet 지갑 생성",a.create,s.password.length>=8&&!s.busy&&!s.recovery)
                     OutlinedButton(onClick=a.recover,enabled=s.password.length>=8&&!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth().height(50.dp)){Text("기존 카드로 복구")}
