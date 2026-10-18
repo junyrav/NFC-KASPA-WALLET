@@ -37,3 +37,8 @@ Native Compose render images for the reference screens are attached to CI as `wa
 Physical NFC reliability, Android Keystore/biometric behavior and a complete TN10 transfer require a real NFC-capable Android phone. No mainnet support is enabled.
 
 Install updates in place without uninstalling. CI restores a stable debug signing key to preserve app data and device Keystore access between builds.
+
+## Preview package and signing migration
+The `preview` build installs alongside the existing app as `com.nfckaspa.wallet.preview`, with the same wallet functionality. It does not read or delete the existing app's data. Recover with two NFC cards and the recovery password to load the wallet in this package. Signing in a different package requires re-registering its daily card payloads after recovery. Recovery shares are preserved; an old app's daily payload is not shared across Android app UIDs.
+
+Earlier CI builds cached `~/.android/debug.keystore`, but AGP writes the key under `~/.config/.android/debug.keystore` on this runner. Those older signing keys were not retained. The workflow now caches both paths and reports its certificate. A legacy APK signed with an unretained key cannot receive a normal same-package update from a different certificate; do not uninstall it just to review the new design. Use the side-by-side preview instead.

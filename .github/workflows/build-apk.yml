@@ -36,13 +36,20 @@ jobs:
           key: nfc-kaspa-wallet-debug-keystore-v1
 
       - name: Build debug APK
-        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:signingReport --stacktrace
+        run: gradle :app:testDebugUnitTest :app:lintDebug :app:lintPreview :app:assembleDebug :app:assemblePreview :app:signingReport --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NFC-KASPA-WALLET-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload side-by-side preview APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFC-KASPA-WALLET-preview
+          path: app/build/outputs/apk/preview/app-preview.apk
           if-no-files-found: error
 
       - name: Upload rendered screen review and test results

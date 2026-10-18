@@ -14,6 +14,17 @@ android {
         targetSdk = 35
         versionCode = 19
         versionName = "0.8.2-testnet"
+        resValue("string", "app_name", "Kaspa NFC Wallet")
+    }
+
+    buildTypes {
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            resValue("string", "app_name", "Kaspa NFC Wallet Preview")
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {

@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.Alignment
@@ -110,10 +110,11 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
 }
 @Composable private fun Title(text:String,back:()->Unit,close:Boolean=false,enabled:Boolean=true) {
-    Row(Modifier.fillMaxWidth().height(54.dp),verticalAlignment=Alignment.CenterVertically) {
-        IconButton(onClick=back,enabled=enabled){Icon(if(close)Icons.Outlined.Close else Icons.Outlined.ArrowBack,"돌아가기",tint=Ink)}
-        Text(text,Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-        if(!close)Spacer(Modifier.width(48.dp))
+    Box(Modifier.fillMaxWidth().height(54.dp)) {
+        Text(text,Modifier.align(Alignment.Center),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+        IconButton(onClick=back,enabled=enabled,modifier=Modifier.align(if(close)Alignment.CenterEnd else Alignment.CenterStart)) {
+            Icon(if(close)Icons.Outlined.Close else Icons.Outlined.ArrowBack,"돌아가기",tint=Ink)
+        }
     }
 }
 @Composable private fun ValueRow(label:String,value:String,sub:String?=null,bold:Boolean=false) {
@@ -146,7 +147,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         confirmButton={TextButton(onClick=a.cancel,enabled=!s.busy){Text("대기 취소")}}
     )
     val scroll=remember(s.tab,s.page){ScrollState(0)}
-    val activity=LocalContext.current as? android.app.Activity
+    val activity=LocalActivity.current
     val view=LocalView.current
     SideEffect { activity?.let {
         WindowInsetsControllerCompat(it.window,view).isAppearanceLightStatusBars=!home
@@ -315,13 +316,13 @@ private fun total(s:WalletVisualState):String = runCatching {
 }
 
 @Composable private fun SettingsGroup(label:String,content:@Composable ColumnScope.()->Unit) {
-    Text(label,fontSize=13.sp,color=Muted,modifier=Modifier.padding(start=3.dp,top=3.dp))
+    Text(label,fontSize=13.sp,lineHeight=18.sp,color=Muted,modifier=Modifier.padding(start=3.dp,top=3.dp))
     Surface(shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.surface,shadowElevation=1.dp){Column(content=content)}
 }
 @Composable private fun SettingsRow(icon:ImageVector,label:String,value:String="",onClick:()->Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(horizontal=14.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(11.dp)) {
-        Icon(icon,null,Modifier.size(20.dp),tint=Ink);Text(label,Modifier.weight(1f),fontSize=14.sp,color=Ink)
-        if(value.isNotEmpty())Text(value,fontSize=11.sp,color=if(value.startsWith("✓"))Green else Muted,maxLines=1)
+    Row(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(horizontal=14.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(11.dp)) {
+        Icon(icon,null,Modifier.size(20.dp),tint=Ink);Text(label,Modifier.weight(1f),fontSize=14.sp,lineHeight=20.sp,color=Ink)
+        if(value.isNotEmpty())Text(value,fontSize=11.sp,lineHeight=16.sp,color=if(value.startsWith("✓"))Green else Muted,maxLines=1)
         Icon(Icons.Outlined.ChevronRight,null,Modifier.size(16.dp),tint=Muted)
     }
 }
