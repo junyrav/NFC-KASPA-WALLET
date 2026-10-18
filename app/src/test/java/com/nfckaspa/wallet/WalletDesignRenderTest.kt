@@ -53,5 +53,14 @@ class WalletDesignRenderTest {
         capture("05-settings-lower")
         compose.runOnIdle{state=base.copy(page="Receive")}
         compose.onNodeWithContentDescription("TN10 수신 주소 QR").assertIsDisplayed();capture("06-receive")
+        compose.runOnIdle{state=base.copy(tab="Transactions",history=listOf(
+            WalletStore.Transfer(address,"a".repeat(64),address,"100.00000000",10000,1792233120000,"in","accepted"),
+            WalletStore.Transfer(address,"b".repeat(64),address,"1.00000000",10000,1792233000000,"out","submitted")
+        ))}
+        compose.onNodeWithText("입금").assertIsDisplayed()
+        compose.onNodeWithText("출금").assertIsDisplayed()
+        compose.onNodeWithText("100.00000000 KAS").assertIsDisplayed()
+        compose.onNodeWithText("네트워크 승인").assertIsDisplayed()
+        capture("07-transactions")
     }
 }
