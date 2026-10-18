@@ -12,8 +12,8 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 16
-        versionName = "0.7.0-testnet"
+        versionCode = 17
+        versionName = "0.8.0-testnet"
     }
 
     compileOptions {
@@ -21,7 +21,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     kotlinOptions { jvmTarget = "17" }
 }
 
