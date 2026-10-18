@@ -1,6 +1,7 @@
 package com.nfckaspa.wallet
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -129,7 +133,11 @@ private fun total(s:WalletVisualState):String = runCatching {
 
 @Composable internal fun WalletDesign(s:WalletVisualState,a:DesignActions) {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
-    Scaffold(containerColor=Color(0xFFF1F9F7),bottomBar={
+    val scroll=remember(s.tab,s.page){ScrollState(0)}
+    val activity=LocalContext.current as? android.app.Activity
+    val view=LocalView.current
+    SideEffect { activity?.let { WindowInsetsControllerCompat(it.window,view).isAppearanceLightStatusBars=!home } }
+    Scaffold(containerColor=if(home)Deep else Color(0xFFF1F9F7),bottomBar={
         if(s.page!="Success") NavigationBar(containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp,modifier=Modifier.border(.5.dp,Line)) {
             listOf(Triple("Wallet","지갑",Icons.Outlined.Home),Triple("Transactions","거래내역",Icons.Outlined.FormatListBulleted),Triple("Cards","카드관리",Icons.Outlined.CreditCard),Triple("Settings","설정",Icons.Outlined.Settings)).forEach { (id,label,icon) ->
                 NavigationBarItem(selected=s.tab==id,onClick={a.navigate(id)},enabled=!s.busy&&!s.awaiting&&!s.recovery&&s.target==null,
@@ -140,7 +148,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     }) { padding ->
         val background=if(home)Brush.verticalGradient(listOf(Deep,Color(0xFF098C7F),Color(0xFFDDF6F0),Color(0xFFF1F9F7)),endY=1300f)
             else Brush.verticalGradient(listOf(Color(0xFFF8FCFB),Color(0xFFECF8F5)))
-        Column(Modifier.padding(padding).fillMaxSize().background(background).verticalScroll(rememberScrollState()).padding(horizontal=18.dp).padding(bottom=16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(padding).fillMaxSize().background(background).verticalScroll(scroll).padding(horizontal=18.dp).padding(bottom=16.dp),verticalArrangement=Arrangement.spacedBy(if(s.tab=="Settings")5.dp else if(home)12.dp else 10.dp)) {
             if(s.address.isBlank()) {
                 Spacer(Modifier.height(24.dp));KaspaBrand(Modifier.size(64.dp).align(Alignment.CenterHorizontally))
                 Text("NFC KASPA WALLET",Modifier.align(Alignment.CenterHorizontally),fontWeight=FontWeight.Bold,fontSize=23.sp,color=Ink)
@@ -195,7 +203,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf(Triple("보내기",Icons.Outlined.NorthEast,{a.route("Send")}),Triple("받기",Icons.Outlined.South,{a.route("Receive")}),Triple("QR 스캔",Icons.Outlined.QrCodeScanner,a.scan),Triple("거래내역",Icons.Outlined.ReceiptLong,{a.navigate("Transactions")})).forEachIndexed { i,(label,icon,click) ->
-            val enabled=i>=2||s.cards.size>=2
+            val enabled=i==3||s.cards.size>=2
             Column(Modifier.weight(1f).height(84.dp).background(Brush.linearGradient(if(i==1)listOf(Color(0xFF08BF9D),Teal) else listOf(Color(0xFF169F93),Deep)),RoundedCornerShape(16.dp)).clickable(enabled=enabled,onClick=click).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
                 Icon(icon,label,Modifier.size(25.dp),tint=if(enabled)Color.White else Color.White.copy(alpha=.4f))
                 Text(label,color=if(enabled)Color.White else Color.White.copy(alpha=.4f),fontSize=12.sp)
@@ -295,9 +303,9 @@ private fun total(s:WalletVisualState):String = runCatching {
     Surface(shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.surface,shadowElevation=1.dp){Column(content=content)}
 }
 @Composable private fun SettingsRow(icon:ImageVector,label:String,value:String="",onClick:()->Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(horizontal=14.dp,vertical=13.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(11.dp)) {
+    Row(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(horizontal=14.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(11.dp)) {
         Icon(icon,null,Modifier.size(20.dp),tint=Ink);Text(label,Modifier.weight(1f),fontSize=14.sp,color=Ink)
-        if(value.isNotEmpty())Text(value,fontSize=11.sp,color=Muted,maxLines=1)
+        if(value.isNotEmpty())Text(value,fontSize=11.sp,color=if(value.startsWith("✓"))Green else Muted,maxLines=1)
         Icon(Icons.Outlined.ChevronRight,null,Modifier.size(16.dp),tint=Muted)
     }
 }

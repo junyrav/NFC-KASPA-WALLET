@@ -30,11 +30,13 @@ jobs:
       - name: Restore stable debug signing key
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
+          path: |
+            ~/.android/debug.keystore
+            ~/.config/.android/debug.keystore
           key: nfc-kaspa-wallet-debug-keystore-v1
 
       - name: Build debug APK
-        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:signingReport --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

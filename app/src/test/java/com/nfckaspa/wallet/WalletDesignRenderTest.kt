@@ -44,6 +44,6 @@ class WalletDesignRenderTest {
         compose.onNodeWithText("오픈소스 라이선스").performScrollTo()
         capture("05-settings-lower")
         compose.runOnIdle{state=base.copy(page="Receive")}
-        compose.onNodeWithContentDescription("TN10 수신 주소 QR").assertExists();capture("06-receive")
+        compose.onNodeWithContentDescription("TN10 수신 주소 QR").assertIsDisplayed();capture("06-receive")
     }
 }

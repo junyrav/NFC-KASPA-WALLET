@@ -377,7 +377,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             else {page=next;if(next.isBlank()){prepared=null;resultTx="";sendInfo=""};if(next=="Send"){resultTx="";sendInfo=""}}
         }},
         copy={copy(it)},refresh={refresh();scope.launch{quote=runCatching{MarketQuote.fetch()}.getOrNull()}},
-        scan={launchScan()},changeTo={sendTo=it.trim();prepared=null;displayedFee=null;sendAll=false;inputRevision++},
+        scan={if(cardMarks.size<2)settingDialog="backup" else launchScan()},changeTo={sendTo=it.trim();prepared=null;displayedFee=null;sendAll=false;inputRevision++},
         changeAmount={sendAmount=it;prepared=null;displayedFee=null;sendAll=false;inputRevision++},
         preflight={preflight()},
         send={if(prepared==null){page="Send";sendInfo="수수료를 다시 확인하세요"}else{awaitingSendCard=true;status="송금 인증 1/2 · 등록된 NFC 카드를 태그하세요";sendInfo=status}},
