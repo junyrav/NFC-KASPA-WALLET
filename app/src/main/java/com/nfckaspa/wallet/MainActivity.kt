@@ -272,6 +272,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                         cardMarks=cardMarks+writeSlot.name; WalletStore.saveCards(context,cardMarks)
                         target=null; daily?.fill(0); daily=null
                         status="CARD ${writeSlot.name} 저장 및 검증 완료 ✓"
+                        Toast.makeText(context,status,Toast.LENGTH_LONG).show()
                     } else {
                         status="카드 읽는 중 · 최대 5회 재시도"
                         val rr=withContext(Dispatchers.IO) { Card.read(tag) {} }
@@ -322,6 +323,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                         shares.values.forEach { it.fill(0) }; shares=Shares.restore(two[0],two[1])
                                         cardMarks=cardMarks+found.keys.map { it.name }; WalletStore.saveCards(context,cardMarks)
                                         status="복구 완료 ✓ · 지갑은 다음 실행부터 자동으로 열립니다"
+                                        Toast.makeText(context,status,Toast.LENGTH_LONG).show()
                                         recoveryMode=false; refresh()
                                     } finally { recovered.fill(0); found.values.forEach { it.fill(0) }; found=emptyMap() }
                                 }

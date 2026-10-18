@@ -134,6 +134,17 @@ private fun total(s:WalletVisualState):String = runCatching {
 
 @Composable internal fun WalletDesign(s:WalletVisualState,a:DesignActions) {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
+    if(s.awaiting||s.recovery||s.target!=null)AlertDialog(
+        onDismissRequest={if(!s.busy)a.cancel()},
+        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else "NFC 카드 인증")},
+        text={Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)) {
+            Icon(Icons.Outlined.Nfc,null,Modifier.size(52.dp),tint=Teal)
+            Text(s.status,fontSize=14.sp)
+            if(s.busy){LinearProgressIndicator(Modifier.fillMaxWidth(),color=Teal);Text("카드를 움직이지 마세요 · 최대 5회 자동 재시도",fontSize=12.sp,color=Muted)}
+            else Text("휴대폰의 NFC 위치에 카드를 가까이 대세요.",fontSize=12.sp,color=Muted)
+        }},
+        confirmButton={TextButton(onClick=a.cancel,enabled=!s.busy){Text("대기 취소")}}
+    )
     val scroll=remember(s.tab,s.page){ScrollState(0)}
     val activity=LocalContext.current as? android.app.Activity
     val view=LocalView.current
