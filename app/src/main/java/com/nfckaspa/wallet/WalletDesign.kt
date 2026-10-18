@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -136,7 +137,11 @@ private fun total(s:WalletVisualState):String = runCatching {
     val scroll=remember(s.tab,s.page){ScrollState(0)}
     val activity=LocalContext.current as? android.app.Activity
     val view=LocalView.current
-    SideEffect { activity?.let { WindowInsetsControllerCompat(it.window,view).isAppearanceLightStatusBars=!home } }
+    SideEffect { activity?.let {
+        WindowInsetsControllerCompat(it.window,view).isAppearanceLightStatusBars=!home
+        @Suppress("DEPRECATION")
+        if(android.os.Build.VERSION.SDK_INT<35)it.window.statusBarColor=(if(home)Deep else Color(0xFFF8FCFB)).toArgb()
+    } }
     Scaffold(containerColor=if(home)Deep else Color(0xFFF1F9F7),bottomBar={
         if(s.page!="Success") NavigationBar(containerColor=MaterialTheme.colorScheme.surface,tonalElevation=0.dp,modifier=Modifier.border(.5.dp,Line)) {
             listOf(Triple("Wallet","지갑",Icons.Outlined.Home),Triple("Transactions","거래내역",Icons.Outlined.FormatListBulleted),Triple("Cards","카드관리",Icons.Outlined.CreditCard),Triple("Settings","설정",Icons.Outlined.Settings)).forEach { (id,label,icon) ->
@@ -190,7 +195,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically){Text("내 지갑 잔액",Modifier.weight(1f),color=Color.White,fontWeight=FontWeight.Medium);IconButton(onClick=a.refresh,modifier=Modifier.size(24.dp)){Icon(Icons.Outlined.Refresh,"잔액 새로고침",tint=Aqua,modifier=Modifier.size(20.dp))}}
             Row(verticalAlignment=Alignment.Bottom,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text(kasNumber(s.balance),Modifier.weight(1f,fill=false),fontSize=30.sp,fontWeight=FontWeight.Bold,color=Color.White,maxLines=1,overflow=TextOverflow.Ellipsis)
+                Text(runCatching{java.text.DecimalFormat("#,##0.00000000",java.text.DecimalFormatSymbols(Locale.US)).format(kasNumber(s.balance).toBigDecimal())}.getOrDefault(kasNumber(s.balance)),Modifier.weight(1f,fill=false),fontSize=30.sp,fontWeight=FontWeight.Bold,color=Color.White,maxLines=1,overflow=TextOverflow.Ellipsis)
                 Text("KAS",fontSize=18.sp,color=Color.White,modifier=Modifier.padding(bottom=3.dp))
             }
             Text(fiat(kasNumber(s.balance),s),fontSize=21.sp,fontWeight=FontWeight.Medium,color=Color.White)

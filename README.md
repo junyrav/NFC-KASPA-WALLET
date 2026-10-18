@@ -1,11 +1,14 @@
-# Kaspa NFC Wallet · v0.8.1 TN10
+# Kaspa NFC Wallet · v0.8.2 TN10
 
 Android/Kotlin wallet for Kaspa **TN10 testnet only**. All network clients are fixed to the TN10 API.
 
 ## Wallet
 - A public wallet address is saved on creation/recovery and loaded on later launches.
 - Opening the wallet and refreshing its balance do not require an NFC tag.
-- Teal Material 3 interface with Wallet, Transactions, Cards and Settings tabs.
+- Reference-matched teal wallet: dark gradient balance header, four action tiles, address controls and dated A/B/C card status.
+- Dedicated Send, confirmation, submission-complete and Receive screens, plus grouped Settings and fixed bottom navigation.
+- QR camera scanner, clipboard paste, fee-aware maximum send, TXID copy and TN10 Explorer links.
+- Public market quotes provide indicative KRW/USD conversions only; TN10 coins have no cash value. Currency selection is saved locally.
 - Receive address/QR, exact 8-decimal amount validation, fee preview and send confirmation.
 - Sending requires one registered NFC card followed by strong Android biometric authentication.
 - Transaction history contains submissions made by this app on this device; submission is not a confirmation count or complete network history.
@@ -28,6 +31,8 @@ gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
 Automated checks cover all recovery pairs and unchanged-card compatibility, invalid shares, amount precision/overflow, address round trips, persistence across new contexts, and simulated activity launch/recreation/navigation/Send/Receive screens.
+
+Native Compose render images for the reference screens are attached to CI as `wallet-visual-review`. Screenshot fixtures are deterministic test data, not a real wallet.
 
 Physical NFC reliability, Android Keystore/biometric behavior and a complete TN10 transfer require a real NFC-capable Android phone. No mainnet support is enabled.
 
