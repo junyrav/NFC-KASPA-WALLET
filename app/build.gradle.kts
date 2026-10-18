@@ -26,6 +26,7 @@ android {
         buildConfig = true
     }
     kotlinOptions { jvmTarget = "17" }
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
@@ -40,5 +41,6 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.82")
     implementation("com.google.zxing:core:3.5.3")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

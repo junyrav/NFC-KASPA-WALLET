@@ -80,7 +80,7 @@ private sealed class ReadResult{data class Ok(val rec:Rec):ReadResult();data cla
 
 internal object Crypto{
     private val rng=SecureRandom();private const val KS="AndroidKeyStore";private const val ALIAS="nkw_v05_daily"
-    private fun dev():SecretKey{val s=KeyStore.getInstance(KS).apply{load(null)};(s.getKey(ALIAS,null) as? SecretKey)?.let{return it};val g=KeyGenerator.getInstance("AES",KS);g.init(KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).setUserAuthenticationRequired(true).setUserAuthenticationParameters(30,KeyProperties.AUTH_BIOMETRIC_STRONG).build());return g.generateKey()}
+    private fun dev():SecretKey{val s=KeyStore.getInstance(KS).apply{load(null)};(s.getKey(ALIAS,null) as? SecretKey)?.let{return it};val g=KeyGenerator.getInstance("AES",KS);g.init(KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).setUserAuthenticationRequired(true).apply { if(android.os.Build.VERSION.SDK_INT>=30) setUserAuthenticationParameters(30,KeyProperties.AUTH_BIOMETRIC_STRONG) else @Suppress("DEPRECATION") setUserAuthenticationValidityDurationSeconds(30) }.build());return g.generateKey()}
     fun random(n:Int)=ByteArray(n).also{rng.nextBytes(it)}
     fun dailyEnc(p:ByteArray):ByteArray{val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,dev());return c.iv+c.doFinal(p)}
     fun dailyDec(b:ByteArray):ByteArray{require(b.size>=60){"daily payload length ${b.size}"};val iv=b.copyOfRange(0,12);val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,dev(),GCMParameterSpec(128,iv));return c.doFinal(b.copyOfRange(12,b.size))}
@@ -173,6 +173,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     var refreshing by remember { mutableStateOf(false) }
     var resultTx by remember { mutableStateOf("") }
     var confirmSend by remember { mutableStateOf(false) }
+    var discardUnbacked by remember { mutableStateOf(false) }
     var inputRevision by remember { mutableIntStateOf(0) }
 
     fun refresh() {
@@ -232,6 +233,8 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
                 try {
                     val writeSlot=target
                     if(writeSlot!=null) {
+                        val cardId=tag.id.joinToString("") { "%02x".format(it.toInt() and 255) }
+                        check(WalletStore.cardOwner(context,cardId).let { it==null || it==writeSlot.name }) { "이미 다른 슬롯에 등록된 카드입니다. 다른 실물 카드를 사용하세요" }
                         val d=daily?:error("카드 준비가 만료되었습니다")
                         val share=shares[writeSlot]?:error("복구 데이터가 없습니다. 카드 2장으로 해제하세요")
                         val encrypted=withContext(Dispatchers.Default) { Crypto.passEnc(share,pass) }
@@ -240,6 +243,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
                         if(!message.contains("저장 완료")) error(message)
                         val check=withContext(Dispatchers.IO) { Card.read(tag) {} }
                         require(check is ReadResult.Ok && check.rec.slot==writeSlot && check.rec.daily.contentEquals(d) && check.rec.recovery.contentEquals(encrypted)) { "저장 검증 실패 · 같은 카드를 다시 태그하세요" }
+                        WalletStore.bindCard(context,cardId,writeSlot.name)
                         cardMarks=cardMarks+writeSlot.name; WalletStore.saveCards(context,cardMarks)
                         target=null; daily?.fill(0); daily=null
                         status="CARD ${writeSlot.name} 저장 및 검증 완료 ✓"
@@ -307,6 +311,9 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     LaunchedEffect(address) { if(address.isNotBlank()) refresh() }
     DisposableEffect(Unit) { onDispose { secret?.fill(0); daily?.fill(0); shares.values.forEach { it.fill(0) }; found.values.forEach { it.fill(0) }; reg {} } }
 
+    if(discardUnbacked) AlertDialog(onDismissRequest={discardUnbacked=false},title={Text("미등록 지갑 닫기")},text={Text("카드를 한 장도 등록하지 않은 지갑 주소를 이 기기에서 제거합니다. 이 주소로 코인을 받았다면 먼저 기존 카드로 복구하세요.")},confirmButton={TextButton(onClick={
+        WalletStore.clearUnbacked(context); address="";balance="— KAS";pass="";discardUnbacked=false;tab="Wallet";page="";status="새 지갑을 만들거나 카드로 복구하세요"
+    }){Text("주소 제거")}},dismissButton={TextButton(onClick={discardUnbacked=false}){Text("취소")}})
     if(confirmSend && prepared!=null) AlertDialog(
         onDismissRequest={confirmSend=false}, title={Text("송금 확인")},
         text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -421,6 +428,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
                     Text("지갑 주소 자동 저장   사용 중")
                     Text("개인키는 앱 저장소에 저장하지 않습니다")
                     Text("버전   ${BuildConfig.VERSION_NAME}")
+                    if(cardMarks.isEmpty() && secret==null) OutlinedButton(onClick={discardUnbacked=true}) {Text("미등록 지갑 닫기") }
                 }
             }
             if(busy || refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())

@@ -16,6 +16,9 @@ internal object WalletStore {
     }
     fun loadCards(c:Context):Set<String> = prefs(c).getStringSet("registered_cards",emptySet()).orEmpty().toSet()
     fun saveCards(c:Context,cards:Set<String>) { prefs(c).edit().putStringSet("registered_cards",cards).apply() }
+    fun cardOwner(c:Context,id:String):String? = prefs(c).getString("card_uid_$id",null)
+    fun bindCard(c:Context,id:String,slot:String) { prefs(c).edit().putString("card_uid_$id",slot).apply() }
+    fun clearUnbacked(c:Context) { check(loadCards(c).isEmpty()); prefs(c).edit().remove("tn10_wallet_address").apply() }
     fun history(c:Context):List<Transfer> = runCatching {
         val a=JSONArray(prefs(c).getString("transfers","[]"))
         (0 until a.length()).map { i -> val o=a.getJSONObject(i); Transfer(o.getString("wallet"),o.getString("txid"),o.getString("to"),o.getString("amount"),o.getLong("fee"),o.getLong("time")) }
