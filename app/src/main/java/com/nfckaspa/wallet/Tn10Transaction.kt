@@ -31,6 +31,23 @@ internal object Tn10Transaction {
         Prepared(KaspaTx.Tx(inputs = utxos.map { KaspaTx.Input(it) }, outputs = listOf(KaspaTx.Output(amount, script = recipient), KaspaTx.Output(change, script = changeSpk))), fee)
     }
 
+    suspend fun prepareMaximum(from:String,to:String):Prepared=withContext(Dispatchers.IO) {
+        val recipient=KaspaTx.p2pkScript(KaspaAddress.testnetPayload(to))
+        KaspaAddress.testnetPayload(from)
+        val utxos=fetchUtxos(from);require(utxos.isNotEmpty()){ "사용 가능한 UTXO가 없습니다" }
+        val total=utxos.fold(0L){sum,u->Math.addExact(sum,u.amount)}
+        val rate=feeRate().also{require(it.isFinite()&&it>0){"수수료율 오류"}}
+        var fee=1L
+        repeat(8) {
+            require(total>fee){"수수료를 포함한 잔액이 부족합니다"}
+            val provisional=KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it,signatureScript=ByteArray(66))},outputs=listOf(KaspaTx.Output(total-fee,script=recipient)))
+            val mass=mass(provisional);val needed=ceil(mass*rate).toLong().coerceAtLeast(mass)
+            if(fee>=needed)return@withContext Prepared(KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it)},outputs=listOf(KaspaTx.Output(total-fee,script=recipient))),fee)
+            fee=needed
+        }
+        error("수수료 계산이 수렴하지 않았습니다. 다시 시도하세요")
+    }
+
     fun signedRequest(tx: KaspaTx.Tx): String = JSONObject().put("transaction", txJson(tx)).put("allowOrphan", false).toString()
 
     private fun fetchUtxos(address: String): List<KaspaTx.Utxo> {

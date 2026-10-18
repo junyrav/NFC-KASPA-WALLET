@@ -12,8 +12,8 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.8.1-testnet"
+        versionCode = 19
+        versionName = "0.8.2-testnet"
     }
 
     compileOptions {
@@ -35,6 +35,8 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation(platform("androidx.compose:compose-bom:2025.01.01"))
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.biometric:biometric:1.1.0")

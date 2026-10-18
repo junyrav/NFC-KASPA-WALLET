@@ -5,6 +5,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import android.graphics.Bitmap
 import android.nfc.NfcAdapter
 import android.nfc.Tag
@@ -136,7 +142,7 @@ private object Tn10 {
     }
 }
 
-private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeFormat.QR_CODE,640,640);return Bitmap.createBitmap(640,640,Bitmap.Config.RGB_565).also{b->for(x in 0 until 640)for(y in 0 until 640)b.setPixel(x,y,if(m[x,y])android.graphics.Color.BLACK else android.graphics.Color.WHITE)}}
+internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeFormat.QR_CODE,640,640);return Bitmap.createBitmap(640,640,Bitmap.Config.RGB_565).also{b->for(x in 0 until 640)for(y in 0 until 640)b.setPixel(x,y,if(m[x,y])android.graphics.Color.BLACK else android.graphics.Color.WHITE)}}
 
 @Composable private fun Panel(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
@@ -172,9 +178,23 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     var busy by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var resultTx by remember { mutableStateOf("") }
-    var confirmSend by remember { mutableStateOf(false) }
+    var displayedFee by remember { mutableStateOf<Long?>(null) }
+    var sentAt by remember { mutableLongStateOf(0) }
+    var sendAll by remember { mutableStateOf(false) }
+    var settingDialog by remember { mutableStateOf("") }
+    var currency by remember { mutableStateOf(WalletStore.currency(context)) }
+    var quote by remember { mutableStateOf<MarketQuote?>(null) }
     var discardUnbacked by remember { mutableStateOf(false) }
     var inputRevision by remember { mutableIntStateOf(0) }
+    val scanner=rememberLauncherForActivityResult(ScanContract()) { result ->
+        val value=result.contents
+        if(value!=null) {
+            val parsed=value.trim().substringBefore('?')
+            if(runCatching{KaspaAddress.testnetPayload(parsed)}.isSuccess){sendTo=parsed;prepared=null;displayedFee=null;sendAll=false;inputRevision++;tab="Wallet";page="Send"}
+            else Toast.makeText(context,"TN10 수신 주소 QR이 아닙니다",Toast.LENGTH_LONG).show()
+        }
+    }
+    fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa TN10 주소 QR을 스캔하세요").setBeepEnabled(false).setOrientationLocked(false))}
 
     fun refresh() {
         if(address.isBlank() || refreshing) return
@@ -196,6 +216,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     fun copy(text:String) {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Kaspa TN10",text))
         status = "복사했습니다"
+        Toast.makeText(context,"복사했습니다",Toast.LENGTH_SHORT).show()
     }
     fun cancelOperation() {
         if(busy) return
@@ -214,13 +235,17 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
         }
     }
     fun preflight() {
-        prepared=null; confirmSend=false; resultTx=""
+        prepared=null; displayedFee=null; resultTx=""
         val revision=inputRevision; val from=address; val to=sendTo; val amount=sendAmount
         busy=true; sendInfo="UTXO와 수수료를 확인하고 있습니다"
         scope.launch {
             try {
-                val p=Tn10Transaction.prepare(from,to,amount)
-                if(revision==inputRevision && address==from) { prepared=p; confirmSend=true; sendInfo="송금 내용을 확인하세요" }
+                val p=if(sendAll) Tn10Transaction.prepareMaximum(from,to) else Tn10Transaction.prepare(from,to,amount)
+                if(revision==inputRevision && address==from) {
+                    prepared=p;displayedFee=p.fee
+                    if(sendAll)sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString()
+                    page="Confirm";sendInfo="송금 내용을 확인하세요"
+                }
             } catch(e:Exception) { sendInfo="송금 준비 실패 · ${e.message}" }
             finally { busy=false }
         }
@@ -271,7 +296,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
                                         unlocked.fill(0); key=null
                                         prepared=null; sendInfo="TN10 네트워크에 제출 중입니다"
                                         val txid=Tn10Broadcast.postTransaction(request)
-                                        resultTx=txid
+                                        resultTx=txid;displayedFee=p.fee;sentAt=System.currentTimeMillis();page="Success"
                                         WalletStore.record(context,address,txid,sendTo,sendAmount,p.fee)
                                         history=WalletStore.history(context)
                                         status="거래 제출 완료 ✓"; sendInfo="네트워크 제출 완료 · 거래내역에서 TXID를 확인하세요"
@@ -314,131 +339,62 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     if(discardUnbacked) AlertDialog(onDismissRequest={discardUnbacked=false},title={Text("미등록 지갑 닫기")},text={Text("카드를 한 장도 등록하지 않은 지갑 주소를 이 기기에서 제거합니다. 이 주소로 코인을 받았다면 먼저 기존 카드로 복구하세요.")},confirmButton={TextButton(onClick={
         WalletStore.clearUnbacked(context); address="";balance="— KAS";pass="";discardUnbacked=false;tab="Wallet";page="";status="새 지갑을 만들거나 카드로 복구하세요"
     }){Text("주소 제거")}},dismissButton={TextButton(onClick={discardUnbacked=false}){Text("취소")}})
-    if(confirmSend && prepared!=null) AlertDialog(
-        onDismissRequest={confirmSend=false}, title={Text("송금 확인")},
-        text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("받는 주소\n$sendTo"); Text("수량  $sendAmount KAS")
-            Text("수수료  ${java.math.BigDecimal.valueOf(prepared!!.fee,8).toPlainString()} KAS")
-            Text("TN10 테스트넷 · NFC 카드 1장과 생체인증 후 제출합니다")
-        }},
-        confirmButton={Button(onClick={confirmSend=false; awaitingSendCard=true; status="송금 인증 1/2 · NFC 카드 1장을 태그하세요"; sendInfo=status}) { Text("카드 인증 시작") }},
-        dismissButton={TextButton(onClick={confirmSend=false}) { Text("취소") }}
-    )
-    Scaffold(containerColor=KaspaSurface, bottomBar={
-        NavigationBar(containerColor=Color.White) {
-            listOf("Wallet" to "지갑","Transactions" to "거래내역","Cards" to "카드관리","Settings" to "설정").forEach { (id,label) ->
-                NavigationBarItem(selected=tab==id,onClick={if(!busy && !awaitingSendCard && target==null && !recoveryMode){tab=id;page=""}},
-                    icon={Text(when(id){"Wallet"->"◈";"Transactions"->"↔";"Cards"->"▣";else->"⚙"},fontSize=22.sp)},label={Text(label,fontSize=11.sp)})
-            }
-        }
-    }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)){Text("Kaspa NFC Wallet",fontSize=23.sp,fontWeight=FontWeight.Bold);Text("NFC + 생체인증",color=KaspaTealDark,fontSize=12.sp)}
-                Surface(color=KaspaMint,shape=RoundedCornerShape(50)){Text("TN10",Modifier.padding(12.dp),color=KaspaTealDark,fontWeight=FontWeight.Bold)}
-            }
-            if(address.isBlank()) {
-                Panel("지갑 시작하기") {
-                    Text("새 지갑을 생성하거나 기존 NFC 카드 2장으로 복구하세요.")
-                    OutlinedTextField(pass,{if(!busy && !recoveryMode)pass=it},label={Text("복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),enabled=!busy&&!recoveryMode,singleLine=true)
-                    Button(onClick={
-                        val key=KaspaAddress.newPrivateKey()
-                        try { saveWallet(key); shares=Shares.split(key); status="지갑 생성 완료 · 카드 A/B/C를 모두 등록하세요";tab="Cards" }
-                        catch(e:Exception){status="지갑 저장 실패 · ${e.message}"}
-                        finally {key.fill(0)}
-                    },enabled=pass.length>=8&&!busy&&!recoveryMode,modifier=Modifier.fillMaxWidth()){Text("새 Testnet 지갑 생성")}
-                    OutlinedButton(onClick={recoveryMode=true;status="서로 다른 NFC 카드 2장을 태그하세요"},enabled=pass.length>=8&&!busy&&!recoveryMode,modifier=Modifier.fillMaxWidth()){Text("기존 카드로 복구")}
-                }
-            } else when(tab) {
-                "Wallet" -> {
-                    if(page.isBlank()) {
-                        Card(colors=CardDefaults.cardColors(containerColor=KaspaMint),shape=RoundedCornerShape(26.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                                Text("TOTAL BALANCE",color=KaspaTealDark,fontSize=12.sp)
-                                Text(balance,fontSize=30.sp,fontWeight=FontWeight.Bold)
-                                Text("TN10 테스트 코인 · 현금 가치 없음",fontSize=12.sp,color=KaspaTealDark)
-                                TextButton(onClick={refresh()},enabled=!refreshing) {Text(if(refreshing)"조회 중…" else "잔액 새로고침")}
-                            }
-                        }
-                        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                            Button(onClick={page="Send";resultTx=""},enabled=cardMarks.size>=2,modifier=Modifier.weight(1f).height(54.dp)){Text("Send · 보내기")}
-                            OutlinedButton(onClick={page="Receive"},enabled=cardMarks.size>=2,modifier=Modifier.weight(1f).height(54.dp)){Text("Receive · 받기")}
-                        }
-                        Panel("지갑 주소") {Text(shortKaspaAddress(address));TextButton(onClick={copy(address)}){Text("주소 복사")}}
-                        WalletSecurityStatus("A" in cardMarks,"B" in cardMarks,"C" in cardMarks)
-                        if(cardMarks.size<2) Text("수신 전에 카드 2장 이상을 등록하세요. 카드 3장 모두 등록을 권장합니다.",color=KaspaTealDark)
-                    } else if(page=="Receive") {
-                        TextButton(onClick={page=""}){Text("‹ 지갑으로")}
-                        Panel("Receive · 받기") {
-                            val bitmap=remember(address){qr(address)}
-                            Image(bitmap.asImageBitmap(),"TN10 수신 주소 QR",Modifier.size(230.dp).align(Alignment.CenterHorizontally))
-                            Text(address,style=MaterialTheme.typography.bodySmall)
-                            Button(onClick={copy(address)},modifier=Modifier.fillMaxWidth()){Text("주소 복사")}
-                            Text("TN10 테스트넷 주소입니다",color=KaspaTealDark)
-                        }
-                    } else {
-                        TextButton(onClick={if(!busy&&!awaitingSendCard){prepared=null;page=""}},enabled=!busy&&!awaitingSendCard){Text("‹ 지갑으로")}
-                        Panel(if(resultTx.isBlank()) "Send · 보내기" else "네트워크 제출 완료 ✓") {
-                            if(resultTx.isNotBlank()) {
-                                Text("TXID");Text(resultTx,style=MaterialTheme.typography.bodySmall)
-                                Text("블록 확인까지 시간이 걸릴 수 있습니다")
-                                TextButton(onClick={copy(resultTx)}){Text("TXID 복사")}
-                                Button(onClick={page="";sendTo="";sendAmount=""}){Text("완료")}
-                            } else {
-                                OutlinedTextField(sendTo,{sendTo=it.trim();prepared=null;inputRevision++},label={Text("받는 주소 · kaspatest:")},enabled=!busy&&!awaitingSendCard,modifier=Modifier.fillMaxWidth())
-                                OutlinedTextField(sendAmount,{sendAmount=it;prepared=null;inputRevision++},label={Text("보낼 수량 (KAS)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),enabled=!busy&&!awaitingSendCard,modifier=Modifier.fillMaxWidth(),singleLine=true)
-                                Button(onClick={preflight()},enabled=!busy&&!awaitingSendCard,modifier=Modifier.fillMaxWidth()){Text("다음 · 수수료 확인")}
-                                if(sendInfo.isNotBlank()) Text(sendInfo)
-                            }
-                        }
-                    }
-                }
-                "Transactions" -> Panel("거래내역") {
-                    Text("이 기기에서 제출한 거래 · TN10",color=KaspaTealDark,fontSize=12.sp)
-                    val records=history.filter{it.wallet==address}
-                    if(records.isEmpty()) Text("아직 제출한 거래가 없습니다")
-                    records.forEach { tx ->
-                        HorizontalDivider()
-                        Text("보내기 · ${tx.amount} KAS",fontWeight=FontWeight.Bold)
-                        Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(tx.time)),fontSize=12.sp)
-                        Text("수신: ${shortKaspaAddress(tx.to)}",fontSize=12.sp)
-                        Text("수수료: ${java.math.BigDecimal.valueOf(tx.fee,8).toPlainString()} KAS",fontSize=12.sp)
-                        Text("제출됨 · ${tx.txid.take(16)}…",fontSize=12.sp)
-                        TextButton(onClick={copy(tx.txid)}){Text("TXID 복사")}
-                    }
-                }
-                "Cards" -> {
-                    WalletSecurityStatus("A" in cardMarks,"B" in cardMarks,"C" in cardMarks)
-                    Panel("카드 관리") {
-                        Text("앱 재실행 후에도 주소와 잔액은 자동으로 열립니다. 카드 등록에는 복구 비밀번호와 기존 카드 2장이 필요합니다.")
-                        if(secret==null) {
-                            OutlinedTextField(pass,{pass=it},label={Text("복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),enabled=!busy&&!recoveryMode,modifier=Modifier.fillMaxWidth(),singleLine=true)
-                            Button(onClick={recoveryMode=true;status="등록된 카드 2장을 태그하세요 · 복구 데이터를 보존합니다"},enabled=pass.length>=8&&!busy&&!recoveryMode){Text("카드 2장으로 등록 잠금 해제")}
-                        }
-                        Slot.entries.forEach { slot ->
-                            OutlinedButton(onClick={prepareCard(slot)},enabled=secret!=null&&!busy&&target==null&&!recoveryMode,modifier=Modifier.fillMaxWidth()){Text("CARD ${slot.name} · ${if(slot.name in cardMarks)"재등록" else "등록"}")}
-                        }
-                        Text("2-of-3 복구 · 등록 이력은 이 기기 기준",fontSize=12.sp,color=KaspaTealDark)
-                    }
-                }
-                "Settings" -> Panel("설정") {
-                    Text("네트워크   TN10 Testnet")
-                    Text("송금 인증   NFC 카드 1장 + 생체인증")
-                    Text("복구   카드 2장 + 복구 비밀번호")
-                    Text("지갑 주소 자동 저장   사용 중")
-                    Text("개인키는 앱 저장소에 저장하지 않습니다")
-                    Text("버전   ${BuildConfig.VERSION_NAME}")
-                    if(cardMarks.isEmpty() && secret==null) OutlinedButton(onClick={discardUnbacked=true}) {Text("미등록 지갑 닫기") }
-                }
-            }
-            if(busy || refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Surface(color=KaspaMint,shape=RoundedCornerShape(16.dp)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text(if(busy)"처리 중 · $status" else status,style=MaterialTheme.typography.bodySmall)
-                    if(awaitingSendCard || target!=null || recoveryMode) TextButton(onClick={cancelOperation()},enabled=!busy){Text("대기 취소")}
-                }
-            }
-            VersionFooter()
-        }
+    BackHandler(enabled=page.isNotBlank() || tab!="Wallet") {
+        if(!busy&&!awaitingSendCard&&target==null&&!recoveryMode){page="";tab="Wallet";prepared=null}
     }
+    LaunchedEffect(Unit) { quote=runCatching{MarketQuote.fetch()}.getOrNull() }
+    if(settingDialog.isNotBlank()) {
+        val messages=mapOf(
+            "language" to ("언어" to "현재 한국어 화면을 제공합니다."),
+            "theme" to ("테마" to "첨부 시안의 Kaspa Teal 테마가 적용되어 있습니다."),
+            "biometric" to ("생체인증" to "송금 서명은 등록된 NFC 카드와 강한 생체인증을 모두 완료해야 진행됩니다."),
+            "lock" to ("개인키 잠금" to "개인키는 NFC 카드의 암호문으로 보관됩니다. 앱에는 주소와 공개 메타데이터만 저장합니다."),
+            "network" to ("네트워크" to "Kaspa Testnet (TN10) 전용입니다. 메인넷 전송은 지원하지 않습니다."),
+            "node" to ("노드" to "https://api-tn10.kaspa.org · 기본 공식 REST API"),
+            "version" to ("앱 정보" to "NFC KASPA WALLET\nv${BuildConfig.VERSION_NAME}\nYour Keys on NFC · Secure · Simple · Yours"),
+            "licenses" to ("오픈소스 라이선스" to "AndroidX / Jetpack Compose · Apache 2.0\nZXing / ZXing Android Embedded · Apache 2.0\nBouncy Castle · MIT\nRobolectric (검증 도구) · MIT"),
+            "backup" to ("카드 등록 필요" to "NFC 카드 2장 이상을 등록한 뒤 송금·수신할 수 있습니다.")
+        )
+        val message=messages[settingDialog]
+        AlertDialog(onDismissRequest={settingDialog=""},title={Text(if(settingDialog=="currency")"표시 통화" else message?.first?:"안내")},
+            text={if(settingDialog=="currency")Column {
+                listOf("KRW" to "대한민국 원 · KRW","USD" to "미국 달러 · USD").forEach { (id,label)->
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){RadioButton(selected=currency==id,onClick={currency=id;WalletStore.saveCurrency(context,id);settingDialog=""});Text(label)}
+                }
+                Text("시장 시세 참고 환산입니다. TN10 코인은 현금 가치가 없습니다.",fontSize=12.sp)
+            } else Text(message?.second.orEmpty())},confirmButton={TextButton(onClick={settingDialog=""}){Text("확인")}})
+    }
+    val dates=cardMarks.associateWith { WalletStore.cardDate(context,it) }
+    WalletDesign(WalletVisualState(
+        address=address,balance=balance,tab=tab,page=page,to=sendTo,amount=sendAmount,fee=displayedFee,
+        txid=resultTx,sentAt=sentAt,cards=cardMarks,dates=dates,history=history,status=status,sendInfo=sendInfo,
+        busy=busy,refreshing=refreshing,awaiting=awaitingSendCard,recovery=recoveryMode,target=target?.name,
+        unlocked=secret!=null,password=pass,currency=currency,krw=quote?.krw,usd=quote?.usd,change=quote?.change
+    ),DesignActions(
+        navigate={if(!busy&&!awaitingSendCard&&target==null&&!recoveryMode){tab=it;page=""}},
+        route={next->if(!busy&&!awaitingSendCard){
+            if((next=="Send"||next=="Receive")&&cardMarks.size<2)settingDialog="backup"
+            else {page=next;if(next.isBlank()){prepared=null;resultTx="";sendInfo=""};if(next=="Send"){resultTx="";sendInfo=""}}
+        }},
+        copy={copy(it)},refresh={refresh();scope.launch{quote=runCatching{MarketQuote.fetch()}.getOrNull()}},
+        scan={launchScan()},changeTo={sendTo=it.trim();prepared=null;displayedFee=null;sendAll=false;inputRevision++},
+        changeAmount={sendAmount=it;prepared=null;displayedFee=null;sendAll=false;inputRevision++},
+        preflight={preflight()},
+        send={if(prepared==null){page="Send";sendInfo="수수료를 다시 확인하세요"}else{awaitingSendCard=true;status="송금 인증 1/2 · 등록된 NFC 카드를 태그하세요";sendInfo=status}},
+        cancel={cancelOperation()},
+        max={if(sendTo.isBlank())sendInfo="전액 입력 전에 받는 주소를 입력하세요" else {
+            busy=true;sendInfo="전액 전송 수수료 계산 중…"
+            scope.launch{try{val p=Tn10Transaction.prepareMaximum(address,sendTo);sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString();sendAll=true;displayedFee=p.fee;prepared=p;sendInfo="수수료를 제외한 최대 수량입니다"}catch(e:Exception){sendInfo="계산 실패 · ${e.message}"}finally{busy=false}}
+        }},
+        password={if(!busy&&!recoveryMode)pass=it},
+        create={val key=KaspaAddress.newPrivateKey();try{saveWallet(key);shares=Shares.split(key);status="지갑 생성 완료 · 카드 A/B/C를 모두 등록하세요";tab="Cards"}catch(e:Exception){status="처리 실패 · ${e.message}"}finally{key.fill(0)}},
+        recover={recoveryMode=true;status="서로 다른 등록 카드 2장을 태그하세요"},register={prepareCard(it)},
+        explorer={id->if(Regex("[0-9a-fA-F]{64}").matches(id))runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://explorer-tn10.kaspa.org/txs/$id"))) }},
+        setting={id->when(id){
+            "paste"->{val cm=context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;sendTo=cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty();prepared=null;displayedFee=null;sendAll=false;inputRevision++}
+            "recovery"->{if(cardMarks.size<2)settingDialog="backup" else {secret?.fill(0);secret=null;shares.values.forEach{it.fill(0)};shares=emptyMap();tab="Cards";status="복구 비밀번호를 입력하고 카드 2장으로 복구를 검증하세요"}}
+            "discard"->discardUnbacked=true
+            else->settingDialog=id
+        }}
+    ))
 }
