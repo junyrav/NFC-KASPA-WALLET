@@ -380,9 +380,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                             if(found.size>=2) {
                                 val two=found.values.take(2);val recovered=Shares.join(two[0],two[1])
                                 try {
-                                    val pub=KaspaAddress.xOnlyPublicKey(recovered)
-                                    require(recoveryPub==null||pub.contentEquals(recoveryPub!!)){"복원한 키와 카드의 지갑 식별자가 다릅니다"}
-                                    if(expected.isNotBlank())require(KaspaAddress.mainnet(recovered)==expected){"복구 주소가 다릅니다. 카드 조합을 확인하세요"}
+                                    RecoveryIdentity.validate(recovered,expected,recoveryPub)
                                     saveWallet(recovered);shares=Shares.restore(two[0],two[1])
                                     if(cardMarks.size==3&&foundSecure.size==2){WalletStore.verifyBackup(context);backupVerified=true}
                                     found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null
@@ -411,11 +409,11 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     if(showGenerated)AlertDialog(onDismissRequest={showGenerated=false},title={Text("새 복구 비밀번호")},
         text={Column{Text(if(address.isBlank())pass else newPass);Text("안전한 곳에 별도로 기록한 뒤 재입력하세요. 앱은 이 비밀번호를 저장하지 않습니다.")}},
         confirmButton={TextButton(onClick={showGenerated=false}){Text("기록했습니다")}})
-    if(overwritePrompt!=null)AlertDialog(onDismissRequest={overwritePrompt=null;target=null;pendingCard=null},
-        title={Text("기존 카드 데이터 덮어쓰기")},
-        text={Column{Text(overwriteDescription);Row(verticalAlignment=Alignment.CenterVertically){Checkbox(overwriteAccepted,{overwriteAccepted=it});Text("기존 지갑 복구에 미치는 영향을 확인했습니다")}}},
-        confirmButton={TextButton(enabled=overwriteAccepted,onClick={overwritePermit=overwritePrompt!!.copy(created=android.os.SystemClock.elapsedRealtime());overwritePrompt=null;status="덮어쓰기를 승인했습니다. 같은 카드를 다시 태그하세요"}){Text("덮어쓰기")}},
-        dismissButton={TextButton(onClick={overwritePrompt=null;overwritePermit=null;target=null;pendingCard=null;status="카드 저장을 취소했습니다"}){Text("취소")}})
+    if(overwritePrompt!=null)OverwriteConsentDialog(overwriteDescription,overwriteAccepted,{overwriteAccepted=it},
+        onContinue={overwritePermit=overwritePrompt!!.copy(created=android.os.SystemClock.elapsedRealtime());overwritePrompt=null;status="덮어쓰기를 승인했습니다. 같은 카드를 다시 태그하세요"},
+        onCancel={overwritePrompt=null;overwritePermit=null;target=null;pendingCard=null;status="카드 저장을 취소했습니다"})
+
+
 
 
     if(discardUnbacked) AlertDialog(onDismissRequest={discardUnbacked=false},title={Text("미등록 지갑 닫기")},text={Text("카드를 한 장도 등록하지 않은 지갑 주소를 이 기기에서 제거합니다. 이 주소로 코인을 받았다면 먼저 기존 카드로 복구하세요.")},confirmButton={TextButton(onClick={

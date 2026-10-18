@@ -46,4 +46,14 @@ class WalletUiTest {
             compose.onNodeWithContentDescription("메인넷 수신 주소 QR").assertExists()
         }
     }
+    @Test fun backgroundingClearsPasswordAndWindowPreventsCapture() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario->
+            scenario.onActivity{assert(it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)}
+            compose.onAllNodes(hasSetTextAction())[0].performTextInput("Correct-Backup!2026")
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            compose.onAllNodes(hasSetTextAction())[0].assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.EditableText,androidx.compose.ui.text.AnnotatedString("")))
+        }
+    }
+
 }

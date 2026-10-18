@@ -87,3 +87,12 @@ internal object Crypto {
     }
     fun sha(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes)
 }
+
+internal object RecoveryIdentity {
+    fun validate(key:ByteArray,expectedAddress:String,authenticatedPub:ByteArray?) {
+        require(expectedAddress.isNotBlank()||authenticatedPub!=null){"지갑 식별 정보 또는 기존 주소가 필요합니다"}
+        val pub=KaspaAddress.xOnlyPublicKey(key)
+        require(authenticatedPub==null||java.security.MessageDigest.isEqual(pub,authenticatedPub)){"복원한 키와 카드의 지갑 식별자가 다릅니다"}
+        if(expectedAddress.isNotBlank())require(KaspaAddress.mainnet(key)==expectedAddress){"복구 주소가 다릅니다. 카드 조합을 확인하세요"}
+    }
+}

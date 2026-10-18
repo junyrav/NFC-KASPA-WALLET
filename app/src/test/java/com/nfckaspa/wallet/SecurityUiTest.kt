@@ -1,0 +1,38 @@
+package com.nfckaspa.wallet
+
+import androidx.compose.runtime.*
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk=[28])
+class SecurityUiTest {
+    @get:Rule val compose=createComposeRule()
+    @Test fun overwriteRequiresAcknowledgementAndNeverWritesOnCheckboxOnly() {
+        var accepted by mutableStateOf(false);var confirmations=0
+        compose.setContent{KaspaWalletTheme{OverwriteConsentDialog("기존 B 카드를 A 카드로 바꾸면 복구에 영향을 줍니다.",accepted,{accepted=it},{confirmations++},{})}}
+        compose.onNodeWithText("덮어쓰기").assertIsNotEnabled()
+        compose.onNode(isToggleable()).performClick()
+        assertEquals(0,confirmations)
+        compose.onNodeWithText("덮어쓰기").assertIsEnabled().performClick()
+        assertEquals(1,confirmations)
+    }
+    @Test fun creatingWalletRequiresMatchingStrongConfirmation() {
+        var state by mutableStateOf(WalletVisualState(password="Correct-Backup!2026",passwordConfirm="wrong"))
+        compose.setContent{KaspaWalletTheme{WalletDesign(state,DesignActions())}}
+        compose.onNodeWithText("새 메인넷 지갑 생성").assertIsNotEnabled()
+        compose.runOnIdle{state=state.copy(passwordConfirm="Correct-Backup!2026")}
+        compose.onNodeWithText("새 메인넷 지갑 생성").assertIsEnabled()
+    }
+    @Test fun confirmationContainsFullRecipientAddress() {
+        val to=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=2})
+        compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(address=to,to=to,amount="1",fee=2000,page="Confirm"),DesignActions())}}
+        compose.onNodeWithText(to).assertIsDisplayed()
+    }
+}

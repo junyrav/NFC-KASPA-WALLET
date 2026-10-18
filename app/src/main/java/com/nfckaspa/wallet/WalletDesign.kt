@@ -139,6 +139,13 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
 }
 
+@Composable internal fun OverwriteConsentDialog(description:String,accepted:Boolean,onAccepted:(Boolean)->Unit,onContinue:()->Unit,onCancel:()->Unit) {
+    AlertDialog(onDismissRequest=onCancel,title={Text("기존 카드 데이터 덮어쓰기")},
+        text={Column{Text(description);Row(verticalAlignment=Alignment.CenterVertically){Checkbox(accepted,onAccepted);Text("기존 지갑 복구에 미치는 영향을 확인했습니다")}}},
+        confirmButton={TextButton(enabled=accepted,onClick=onContinue){Text("덮어쓰기")}},
+        dismissButton={TextButton(onClick=onCancel){Text("취소")}})
+}
+
 @Composable internal fun WalletDesign(s:WalletVisualState,a:DesignActions) {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
     if(!s.confirmationOpen&&(s.awaiting||s.recovery||s.target!=null))AlertDialog(
@@ -231,13 +238,14 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf(Triple("보내기",Icons.Outlined.NorthEast,{a.route("Send")}),Triple("받기",Icons.Outlined.South,{a.route("Receive")}),Triple("QR 스캔",Icons.Outlined.QrCodeScanner,a.scan),Triple("거래내역",Icons.Outlined.ReceiptLong,{a.navigate("Transactions")})).forEachIndexed { i,(label,icon,click) ->
-            val enabled=i==3||s.cards.size>=2
+            val enabled=i==3||(s.cards.size==3&&s.backupVerified)
             Column(Modifier.weight(1f).height(84.dp).background(Brush.linearGradient(if(i==1)listOf(Color(0xFF08BF9D),Teal) else listOf(Color(0xFF169F93),Deep)),RoundedCornerShape(16.dp)).clickable(enabled=enabled,onClick=click).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
                 Icon(icon,label,Modifier.size(25.dp),tint=if(enabled)Color.White else Color.White.copy(alpha=.4f))
                 Text(label,color=if(enabled)Color.White else Color.White.copy(alpha=.4f),fontSize=12.sp)
             }
         }
     }
+    if(!s.backupVerified)Hint("백업 미완료", "카드관리에서 보안 카드 3장 등록과 2장 복구 검증을 마친 뒤 입금하세요.")
     WhiteCard {
         Text("내 주소 (kaspa)",fontWeight=FontWeight.SemiBold,fontSize=13.sp,color=Ink)
         Row(Modifier.fillMaxWidth().background(Color(0xFFF6FAF9),RoundedCornerShape(8.dp)),verticalAlignment=Alignment.CenterVertically){Text(shortKaspaAddress(s.address),Modifier.weight(1f).padding(start=8.dp),fontSize=13.sp,maxLines=1);IconButton(onClick={a.copy(s.address)}){Icon(Icons.Outlined.ContentCopy,"주소 복사",Modifier.size(19.dp),tint=Ink)};IconButton(onClick={a.route("Receive")}){Icon(Icons.Outlined.QrCode2,"수신 QR 보기",Modifier.size(22.dp),tint=Ink)}}
