@@ -26,13 +26,10 @@ internal object KaspaTx {
     private fun le64(v:Long)=ByteArray(8){i->((v ushr (8*i)) and 255).toByte()}
     private fun variable(b:ByteArray)=le64(b.size.toLong())+b
 
-    /**
-     * Kaspa's TransactionSigningHash is BLAKE2b-256 keyed with the full
-     * ASCII domain string "TransactionSigningHash". It is NOT BLAKE2b
-     * personalization. Bouncy Castle takes the digest length in bits here.
-     */
+    /** Kaspa TransactionSigningHash: keyed BLAKE2b-256. */
     private fun signingHash(vararg chunks:ByteArray):ByteArray{
-        val d=Blake2bDigest(signingDomain,256,null,null)
+        // BC's keyed constructor takes digest length in BYTES (1..64), not bits.
+        val d=Blake2bDigest(signingDomain,32,null,null)
         chunks.forEach{d.update(it,0,it.size)}
         return ByteArray(32).also{d.doFinal(it,0)}
     }
