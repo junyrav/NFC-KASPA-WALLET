@@ -1,6 +1,9 @@
 package com.nfckaspa.wallet
 
 import android.app.PendingIntent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.nfc.NfcAdapter
@@ -21,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -34,6 +38,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
 import java.security.SecureRandom
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -110,7 +115,7 @@ private object Crypto {
         val c = Cipher.getInstance("AES/GCM/NoPadding"); c.init(Cipher.ENCRYPT_MODE, dev()); return c.iv + c.doFinal(p)
     }
     fun dailyDec(b: ByteArray): ByteArray {
-        require(b.size > 28)
+        require(b.size >= 60) { "daily payload length ${b.size}" }
         val iv = b.copyOfRange(0, 12)
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.DECRYPT_MODE, dev(), GCMParameterSpec(128, iv))
@@ -146,7 +151,7 @@ private object Card {
 }
 
 private object Tn10 {
-    private suspend fun get(path:String):String=withContext(Dispatchers.IO){val c=(URL("https://api-tn10.kaspa.org$path").openConnection() as HttpURLConnection).apply{connectTimeout=10000;readTimeout=10000;requestMethod="GET";setRequestProperty("Accept","application/json");setRequestProperty("User-Agent","NFC-KASPA-WALLET/0.6.6")};try{val code=c.responseCode;val stream=if(code in 200..299)c.inputStream else c.errorStream;val body=stream?.bufferedReader()?.use{it.readText()}.orEmpty();if(code !in 200..299)throw IllegalStateException("HTTP $code ${body.take(160)}");body}finally{c.disconnect()}}
+    private suspend fun get(path:String):String=withContext(Dispatchers.IO){val c=(URL("https://api-tn10.kaspa.org$path").openConnection() as HttpURLConnection).apply{connectTimeout=10000;readTimeout=10000;requestMethod="GET";setRequestProperty("Accept","application/json");setRequestProperty("User-Agent","NFC-KASPA-WALLET/0.6.7")};try{val code=c.responseCode;val stream=if(code in 200..299)c.inputStream else c.errorStream;val body=stream?.bufferedReader()?.use{it.readText()}.orEmpty();if(code !in 200..299)throw IllegalStateException("HTTP $code ${body.take(160)}");body}finally{c.disconnect()}}
     suspend fun balance(address:String):String{val body=get("/addresses/$address/balance");val n=Regex("\"balance\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()?:throw IllegalStateException("balance 필드 없음: ${body.take(120)}");return "%.8f KAS".format(n/100000000.0)}
     suspend fun utxoCount(address:String):Int{val body=get("/addresses/$address/utxos");return Regex("\"outpoint\"\\s*:").findAll(body).count().let{if(it>0)it else Regex("\"transactionId\"\\s*:").findAll(body).count()}}
     suspend fun feeRate():Double{val body=get("/info/fee-estimate");return Regex("\"feerate\"\\s*:\\s*([0-9.]+)").find(body)?.groupValues?.get(1)?.toDoubleOrNull()?:throw IllegalStateException("feerate 필드 없음")}
@@ -160,8 +165,9 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     var shares by remember{mutableStateOf<Map<Slot,ByteArray>>(emptyMap())}; var daily by remember{mutableStateOf<ByteArray?>(null)}; var target by remember{mutableStateOf<Slot?>(null)}
     var found by remember{mutableStateOf<Map<Slot,ByteArray>>(emptyMap())}; var balance by remember{mutableStateOf("-- KAS")}; var showReceive by remember{mutableStateOf(false)}; var showSend by remember{mutableStateOf(false)}
     var sendTo by remember{mutableStateOf("")}; var sendAmount by remember{mutableStateOf("")}; var sendInfo by remember{mutableStateOf("")}; var sendReady by remember{mutableStateOf(false)}; var awaitingSendCard by remember{mutableStateOf(false)}
-    val scope=rememberCoroutineScope()
+    val scope=rememberCoroutineScope(); val context=LocalContext.current
 
+    fun copyAddress(){if(address.isBlank())return;val cm=context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;cm.setPrimaryClip(ClipData.newPlainText("Kaspa TN10 address",address));status="지갑 주소 복사 완료 ✓"}
     fun refresh(){if(address.isBlank())return;balance="조회 중...";scope.launch{try{balance=Tn10.balance(address);status="TN10 잔액 조회 성공 ✓"}catch(e:Exception){balance="조회 실패";status="TN10 조회 오류 · ${e.javaClass.simpleName}: ${e.message?:"원인 불명"}"}}}
     fun prepare(s:Slot){if(secret==null||pass.length<8){status="먼저 Testnet 지갑을 생성하세요";return};bio{ok,msg->if(ok){try{daily=Crypto.dailyEnc(secret!!);target=s;status="생체인증 완료 ✓ · CARD ${s.name}를 태그하세요"}catch(e:Exception){status="암호화 실패: ${e.javaClass.simpleName}"}}else status=msg}}
     fun preflight(){sendReady=false;if(address.isBlank()){sendInfo="먼저 Testnet 지갑을 생성/복구하세요";return};if(!sendTo.startsWith("kaspatest:")||sendTo.length<20){sendInfo="수신 주소를 확인하세요";return};val a=sendAmount.toDoubleOrNull();if(a==null||a<=0.0){sendInfo="송금 수량을 확인하세요";return};sendInfo="TN10 UTXO/수수료 조회 중...";scope.launch{try{val u=Tn10.utxoCount(address);val f=Tn10.feeRate();sendReady=u>0;sendInfo=if(sendReady)"송금 준비 완료 · UTXO ${u}개 · fee rate ${"%.2f".format(f)} sompi/gram" else "사용 가능한 UTXO가 없습니다";status=if(sendReady)"사전검증 완료 ✓ · 송금 버튼을 누르세요" else "송금 불가 · UTXO 없음"}catch(e:Exception){sendInfo="송금 사전검증 실패 · ${e.message?:e.javaClass.simpleName}"}}}
@@ -171,7 +177,7 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
         if(awaitingSendCard){
             when(val rr=Card.read(tag){status=it}){
                 is ReadResult.Error->{status=rr.msg;sendInfo="NFC 인증 실패"}
-                is ReadResult.Ok->{awaitingSendCard=false;sendInfo="CARD ${rr.rec.slot.name} 확인 ✓ · 생체인증 대기";status="송금 인증 2/2 · Galaxy 생체인증을 해주세요";bio{ok,msg->if(ok){var key:ByteArray?=null;try{key=Crypto.dailyDec(rr.rec.daily);val derived=KaspaAddress.testnet(key);if(derived==address){sendInfo="NFC + 생체인증 완료 ✓ · 지갑 키 일치";status="송금 서명 준비 완료 ✓ · 실제 Broadcast 연결 전 단계"}else{sendInfo="카드의 지갑 키가 현재 주소와 일치하지 않습니다";status="송금 인증 실패 ✕"}}catch(e:Exception){sendInfo="daily key 복호화 실패 · ${e.javaClass.simpleName}";status="송금 인증 실패 ✕"}finally{key?.fill(0)}}else{sendInfo=msg;status="송금 생체인증 실패/취소"}}}
+                is ReadResult.Ok->{awaitingSendCard=false;sendInfo="CARD ${rr.rec.slot.name} 확인 ✓ · 생체인증 대기";status="송금 인증 2/2 · Galaxy 생체인증을 해주세요";bio{ok,msg->if(ok){var key:ByteArray?=null;var fallback=false;try{try{key=Crypto.dailyDec(rr.rec.daily)}catch(e:AEADBadTagException){val session=secret;if(session!=null&&KaspaAddress.testnet(session)==address){key=session.copyOf();fallback=true}else throw e};val derived=KaspaAddress.testnet(key!!);if(derived==address){sendInfo=if(fallback)"NFC + 생체인증 완료 ✓ · 기존 daily key 불일치 감지, 현재 복구된 지갑 키로 검증 완료" else "NFC + 생체인증 완료 ✓ · 지갑 키 일치";status="송금 서명 준비 완료 ✓ · 실제 Broadcast 연결 전 단계"}else{sendInfo="카드의 지갑 키가 현재 주소와 일치하지 않습니다";status="송금 인증 실패 ✕"}}catch(e:Exception){sendInfo="daily key 검증 실패 · ${e.javaClass.simpleName}";status="송금 인증 실패 ✕"}finally{key?.fill(0)}}else{sendInfo=msg;status="송금 생체인증 실패/취소"}}}
             }
         } else {
             val t=target
@@ -181,11 +187,11 @@ private fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForma
     }}
 
     MaterialTheme{Surface(Modifier.fillMaxSize()){Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally){
-        Text("NFC KASPA WALLET",style=MaterialTheme.typography.headlineMedium);Text("TN10 TESTNET · v0.6.6");Spacer(Modifier.height(14.dp))
-        Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text("Testnet Balance",style=MaterialTheme.typography.titleMedium);Text(balance,style=MaterialTheme.typography.headlineMedium);if(address.isNotEmpty()){Spacer(Modifier.height(8.dp));Text(address,maxLines=2);Spacer(Modifier.height(8.dp));Row{Button(onClick={refresh()}){Text("잔액 새로고침")};Spacer(Modifier.width(8.dp));Button(onClick={showReceive=!showReceive;showSend=false}){Text(if(showReceive)"QR 닫기" else "Receive")};Spacer(Modifier.width(8.dp));Button(onClick={showSend=!showSend;showReceive=false}){Text(if(showSend)"Send 닫기" else "Send")}}}}}
+        Text("NFC KASPA WALLET",style=MaterialTheme.typography.headlineMedium);Text("TN10 TESTNET · v0.6.7");Spacer(Modifier.height(14.dp))
+        Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text("Testnet Balance",style=MaterialTheme.typography.titleMedium);Text(balance,style=MaterialTheme.typography.headlineMedium);if(address.isNotEmpty()){Spacer(Modifier.height(8.dp));Text(address,maxLines=2);Spacer(Modifier.height(8.dp));Row{Button(onClick={copyAddress()}){Text("주소 복사")};Spacer(Modifier.width(8.dp));Button(onClick={refresh()}){Text("잔액 새로고침")};Spacer(Modifier.width(8.dp));Button(onClick={showReceive=!showReceive;showSend=false}){Text(if(showReceive)"QR 닫기" else "Receive")};Spacer(Modifier.width(8.dp));Button(onClick={showSend=!showSend;showReceive=false}){Text(if(showSend)"Send 닫기" else "Send")}}}}}
         if(showReceive&&address.isNotEmpty()){Spacer(Modifier.height(10.dp));val qrBitmap=remember(address){qr(address)};Image(qrBitmap.asImageBitmap(),"Receive QR",Modifier.size(220.dp));Text("TN10 Testnet 수신 주소")}
-        if(showSend){Spacer(Modifier.height(10.dp));Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text("Send · TN10",style=MaterialTheme.typography.titleMedium);OutlinedTextField(sendTo,{sendTo=it.trim();sendReady=false},label={Text("받는 주소 (kaspatest:)")},modifier=Modifier.fillMaxWidth());Spacer(Modifier.height(8.dp));OutlinedTextField(sendAmount,{sendAmount=it;sendReady=false},label={Text("보낼 수량 (KAS)")},modifier=Modifier.fillMaxWidth());Spacer(Modifier.height(8.dp));Button(onClick={preflight()},modifier=Modifier.fillMaxWidth()){Text("1. UTXO / 수수료 확인")};Spacer(Modifier.height(8.dp));Button(onClick={beginSend()},enabled=sendReady&&!awaitingSendCard,modifier=Modifier.fillMaxWidth()){Text(if(awaitingSendCard)"NFC 카드를 태그하세요..." else "2. 송금 인증 (NFC + 생체인증)")};if(sendInfo.isNotBlank()){Spacer(Modifier.height(8.dp));Text(sendInfo)};Text("※ v0.6.6은 NFC+생체인증 및 키 검증까지 수행합니다. TN10 Broadcast는 아직 비활성화 상태입니다.",style=MaterialTheme.typography.bodySmall)}}}
+        if(showSend){Spacer(Modifier.height(10.dp));Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){Text("Send · TN10",style=MaterialTheme.typography.titleMedium);OutlinedTextField(sendTo,{sendTo=it.trim();sendReady=false},label={Text("받는 주소 (kaspatest:)")},modifier=Modifier.fillMaxWidth());Spacer(Modifier.height(8.dp));OutlinedTextField(sendAmount,{sendAmount=it;sendReady=false},label={Text("보낼 수량 (KAS)")},modifier=Modifier.fillMaxWidth());Spacer(Modifier.height(8.dp));Button(onClick={preflight()},modifier=Modifier.fillMaxWidth()){Text("1. UTXO / 수수료 확인")};Spacer(Modifier.height(8.dp));Button(onClick={beginSend()},enabled=sendReady&&!awaitingSendCard,modifier=Modifier.fillMaxWidth()){Text(if(awaitingSendCard)"NFC 카드를 태그하세요..." else "2. 송금 인증 (NFC + 생체인증)")};if(sendInfo.isNotBlank()){Spacer(Modifier.height(8.dp));Text(sendInfo)};Text("※ v0.6.7은 NFC+생체인증 및 키 검증까지 수행합니다. TN10 Broadcast는 아직 비활성화 상태입니다.",style=MaterialTheme.typography.bodySmall)}}}
         Spacer(Modifier.height(12.dp));OutlinedTextField(pass,{pass=it;found=emptyMap()},label={Text("Recovery Password (8자 이상)")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Spacer(Modifier.height(8.dp))
-        Button(onClick={if(pass.length<8)status="비밀번호는 8자 이상으로 해주세요" else{secret=KaspaAddress.newPrivateKey();address=KaspaAddress.testnet(secret!!);shares=Shares.split(secret!!);found=emptyMap();balance="0.00000000 KAS";status="Kaspa TN10 키/주소 생성 ✓ · A/B/C 카드를 등록하세요";refresh()}}){Text("새 Testnet 지갑 생성")};Spacer(Modifier.height(10.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){Button(onClick={prepare(Slot.A)}){Text("A 등록")};Button(onClick={prepare(Slot.B)}){Text("B 등록")};Button(onClick={prepare(Slot.C)}){Text("C 등록")}};Spacer(Modifier.height(10.dp));Card(Modifier.fillMaxWidth()){Text(status,Modifier.padding(14.dp))};Spacer(Modifier.height(8.dp));Text("복구: 앱 재실행 → Password → 서로 다른 카드 2장 태그");Spacer(Modifier.height(20.dp));Text("v0.6.6 · TN10 TESTNET ONLY · Mainnet 사용 금지")
+        Button(onClick={if(pass.length<8)status="비밀번호는 8자 이상으로 해주세요" else{secret=KaspaAddress.newPrivateKey();address=KaspaAddress.testnet(secret!!);shares=Shares.split(secret!!);found=emptyMap();balance="0.00000000 KAS";status="Kaspa TN10 키/주소 생성 ✓ · A/B/C 카드를 등록하세요";refresh()}}){Text("새 Testnet 지갑 생성")};Spacer(Modifier.height(10.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){Button(onClick={prepare(Slot.A)}){Text("A 등록")};Button(onClick={prepare(Slot.B)}){Text("B 등록")};Button(onClick={prepare(Slot.C)}){Text("C 등록")}};Spacer(Modifier.height(10.dp));Card(Modifier.fillMaxWidth()){Text(status,Modifier.padding(14.dp))};Spacer(Modifier.height(8.dp));Text("복구: 앱 재실행 → Password → 서로 다른 카드 2장 태그");Spacer(Modifier.height(20.dp));Text("v0.6.7 · TN10 TESTNET ONLY · Mainnet 사용 금지")
     }}}
 }
