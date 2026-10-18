@@ -1,6 +1,9 @@
 package com.nfckaspa.wallet
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -80,14 +83,12 @@ private fun total(s:WalletVisualState):String = runCatching {
 }.getOrDefault("—")
 
 @Composable internal fun KaspaBrand(modifier:Modifier=Modifier) {
-    Box(modifier.background(Brush.linearGradient(listOf(Aqua,Teal)),CircleShape),contentAlignment=Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(10.dp)) {
-            val w=size.width;val h=size.height
-            fun segment(x:Float,y:Float,x2:Float,y2:Float)=drawLine(Color.White,Offset(w*x,h*y),Offset(w*x2,h*y2),w*.15f,StrokeCap.Square)
-            segment(.59f,.06f,.43f,.94f);segment(.13f,.22f,.48f,.50f);segment(.09f,.79f,.48f,.50f)
-            segment(.88f,.07f,.72f,.93f)
-        }
-    }
+    Image(
+        painter=painterResource(R.drawable.kaspa_nfc_logo),
+        contentDescription="Kaspa NFC Wallet 로고",
+        contentScale=ContentScale.Fit,
+        modifier=modifier.clip(CircleShape)
+    )
 }
 
 @Composable private fun WhiteCard(modifier:Modifier=Modifier,content:@Composable ColumnScope.()->Unit) {
