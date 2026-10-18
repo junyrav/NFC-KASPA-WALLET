@@ -196,7 +196,30 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     }
     fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa TN10 주소 QR을 스캔하세요").setBeepEnabled(false).setOrientationLocked(false))}
 
+    var historyLoading by remember { mutableStateOf(false) }
+    var historyError by remember { mutableStateOf("") }
+    var historyOffset by remember(address) { mutableStateOf(0) }
+    var historyMore by remember(address) { mutableStateOf(false) }
+    fun refreshHistory(more:Boolean=false) {
+        if(address.isBlank() || historyLoading) return
+        val requested=address
+        val offset=if(more)historyOffset else 0
+        historyLoading=true;historyError=""
+        scope.launch {
+            try {
+                val result=Tn10History.fetch(requested,offset)
+                if(address==requested) {
+                    WalletStore.mergeHistory(context,result.records)
+                    history=WalletStore.history(context)
+                    historyOffset=offset+result.count
+                    historyMore=result.count==Tn10History.PAGE_SIZE
+                }
+            } catch(e:Exception) { if(address==requested)historyError="거래내역 조회 실패 · 다시 시도해 주세요 (${e.message})" }
+            finally { historyLoading=false }
+        }
+    }
     fun refresh() {
+        refreshHistory()
         if(address.isBlank() || refreshing) return
         val requested = address
         refreshing = true
@@ -369,16 +392,16 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     val dates=cardMarks.associateWith { WalletStore.cardDate(context,it) }
     WalletDesign(WalletVisualState(
         address=address,balance=balance,tab=tab,page=page,to=sendTo,amount=sendAmount,fee=displayedFee,
-        txid=resultTx,sentAt=sentAt,cards=cardMarks,dates=dates,history=history,status=status,sendInfo=sendInfo,
+        txid=resultTx,sentAt=sentAt,cards=cardMarks,dates=dates,history=history,historyLoading=historyLoading,historyError=historyError,historyMore=historyMore,status=status,sendInfo=sendInfo,
         busy=busy,refreshing=refreshing,awaiting=awaitingSendCard,recovery=recoveryMode,target=target?.name,
         unlocked=secret!=null,password=pass,currency=currency,krw=quote?.krw,usd=quote?.usd,change=quote?.change
     ),DesignActions(
-        navigate={if(!busy&&!awaitingSendCard&&target==null&&!recoveryMode){tab=it;page=""}},
+        navigate={if(!busy&&!awaitingSendCard&&target==null&&!recoveryMode){tab=it;page="";if(it=="Transactions")refreshHistory()}},
         route={next->if(!busy&&!awaitingSendCard){
             if((next=="Send"||next=="Receive")&&cardMarks.size<2)settingDialog="backup"
             else {page=next;if(next.isBlank()){prepared=null;resultTx="";sendInfo=""};if(next=="Send"){resultTx="";sendInfo=""}}
         }},
-        copy={copy(it)},refresh={refresh();scope.launch{quote=runCatching{MarketQuote.fetch()}.getOrNull()}},
+        historyRefresh={refreshHistory()},historyNext={refreshHistory(true)},copy={copy(it)},refresh={refresh();scope.launch{quote=runCatching{MarketQuote.fetch()}.getOrNull()}},
         scan={if(cardMarks.size<2)settingDialog="backup" else launchScan()},changeTo={sendTo=it.trim();prepared=null;displayedFee=null;sendAll=false;inputRevision++},
         changeAmount={sendAmount=it;prepared=null;displayedFee=null;sendAll=false;inputRevision++},
         preflight={preflight()},

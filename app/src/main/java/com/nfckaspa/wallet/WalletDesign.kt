@@ -56,12 +56,14 @@ internal data class WalletVisualState(
     val address:String="", val balance:String="— KAS", val tab:String="Wallet", val page:String="",
     val to:String="",val amount:String="",val fee:Long?=null,val txid:String="",val sentAt:Long=0,
     val cards:Set<String> = emptySet(),val dates:Map<String,String> = emptyMap(),
-    val history:List<WalletStore.Transfer> = emptyList(),val status:String="",val sendInfo:String="",
+    val history:List<WalletStore.Transfer> = emptyList(),
+    val historyLoading:Boolean=false,val historyError:String="",val historyMore:Boolean=false,val status:String="",val sendInfo:String="",
     val busy:Boolean=false,val refreshing:Boolean=false,val awaiting:Boolean=false,val recovery:Boolean=false,
     val target:String?=null,val unlocked:Boolean=false,val password:String="",val currency:String="KRW",
     val krw:Double?=null,val usd:Double?=null,val change:Double?=null
 )
 internal data class DesignActions(
+    val historyRefresh:()->Unit={},val historyNext:()->Unit={},
     val navigate:(String)->Unit={},val route:(String)->Unit={},val copy:(String)->Unit={},
     val refresh:()->Unit={},val scan:()->Unit={},val changeTo:(String)->Unit={},val changeAmount:(String)->Unit={},
     val preflight:()->Unit={},val send:()->Unit={},val cancel:()->Unit={},val max:()->Unit={},
@@ -378,15 +380,21 @@ private fun total(s:WalletVisualState):String = runCatching {
 
 @Composable private fun TransactionsDesign(s:WalletVisualState,a:DesignActions) {
     Title("거래내역",{a.navigate("Wallet")})
-    Text("이 기기에서 제출한 TN10 거래",fontSize=12.sp,color=Muted)
+    Row(verticalAlignment=Alignment.CenterVertically) {
+        Text("TN10 입금 · 출금 내역",Modifier.weight(1f),fontSize=12.sp,color=Muted)
+        TextButton(onClick=a.historyRefresh,enabled=!s.historyLoading){Text(if(s.historyLoading)"조회 중…" else "새로고침")}
+    }
+    if(s.historyError.isNotBlank())Text(s.historyError,fontSize=12.sp,color=Muted)
     val records=s.history.filter{it.wallet==s.address}
-    if(records.isEmpty())WhiteCard {
+    if(records.isEmpty()&&!s.historyLoading&&s.historyError.isBlank())WhiteCard {
         Icon(Icons.Outlined.ReceiptLong,null,Modifier.size(42.dp).align(Alignment.CenterHorizontally),tint=Teal)
-        Text("아직 제출한 거래가 없습니다",Modifier.align(Alignment.CenterHorizontally),fontSize=14.sp,color=Muted)
+        Text("아직 거래내역이 없습니다",Modifier.align(Alignment.CenterHorizontally),fontSize=14.sp,color=Muted)
     }
     records.forEach {tx->WhiteCard {
-        Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Outlined.NorthEast,null,tint=Teal);Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){Text("보내기",fontWeight=FontWeight.SemiBold,color=Ink);Text(SimpleDateFormat("yyyy.MM.dd HH:mm",Locale.KOREA).format(Date(tx.time)),fontSize=11.sp,color=Muted)};Text("${tx.amount} KAS",fontWeight=FontWeight.SemiBold,color=Ink)}
-        Text(shortKaspaAddress(tx.to),fontSize=12.sp,color=Muted)
+        Row(verticalAlignment=Alignment.CenterVertically){Icon(if(tx.direction=="in")Icons.Outlined.SouthWest else Icons.Outlined.NorthEast,null,tint=Teal);Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){Text(when(tx.direction){"in"->"입금";"self"->"내 주소로 전송";"out"->"출금";else->"거래 확인 중"},fontWeight=FontWeight.SemiBold,color=Ink);Text(SimpleDateFormat("yyyy.MM.dd HH:mm",Locale.KOREA).format(Date(tx.time)),fontSize=11.sp,color=Muted)};Text("${tx.amount} KAS",fontWeight=FontWeight.SemiBold,color=Ink)}
+        Text(when(tx.state){"accepted"->"네트워크 승인";"submitted"->"제출됨 · 승인 확인 대기";"unaccepted"->"네트워크 미승인";else->"승인 상태 확인 중"},fontSize=11.sp,color=Muted)
+        if(tx.to.isNotBlank())Text(shortKaspaAddress(tx.to),fontSize=12.sp,color=Muted)
         Row{TextButton(onClick={a.copy(tx.txid)}){Text("TXID 복사")};TextButton(onClick={a.explorer(tx.txid)}){Text("Explorer에서 보기")}}
     }}
+    if(s.historyMore)TextButton(onClick=a.historyNext,enabled=!s.historyLoading){Text("이전 거래 더 보기")}
 }

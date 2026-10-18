@@ -32,7 +32,7 @@ class WalletUiTest {
             scenario.recreate()
             compose.onNodeWithText("내 지갑 잔액").assertIsDisplayed()
             compose.onAllNodesWithText("거래내역",useUnmergedTree=true)[1].performClick()
-            compose.onNodeWithText("아직 제출한 거래가 없습니다").assertIsDisplayed()
+            compose.onNodeWithText("TN10 입금 · 출금 내역").assertIsDisplayed()
             compose.onNodeWithText("카드관리",useUnmergedTree=true).performClick()
             compose.onNodeWithText("카드 관리").assertIsDisplayed()
             compose.onNodeWithText("설정",useUnmergedTree=true).performClick()
