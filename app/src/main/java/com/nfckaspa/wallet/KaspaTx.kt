@@ -96,12 +96,27 @@ internal object KaspaTx {
         val totalIn=tx.inputs.fold(0L){sum,i->Math.addExact(sum,i.utxo.amount)}
         val totalOut=tx.outputs.fold(0L){sum,o->Math.addExact(sum,o.amount)}
         require(totalIn>totalOut){"거래 금액 또는 수수료 오류"}
+        FeePolicy.check(totalIn-totalOut,tx.outputs.first().amount,KaspaMass.calculate(tx))
         tx.inputs.forEachIndexed{idx,input->
             val hash=schnorrSigHash(tx,idx)
             val sig=bip340Sign(hash,privateKey)
             check(bip340Verify(hash,pub,sig)){"서명 검증 실패"}
             input.signatureScript=byteArrayOf(65)+sig+byteArrayOf(1)
         }
+    }
+
+    /** Version-0 native TransactionID: excludes signatures, sigop counts and mass commitment. */
+    fun transactionId(tx:Tx):String {
+        require(tx.version==0)
+        val chunks=ArrayList<ByteArray>()
+        chunks+=le16(tx.version);chunks+=le64(tx.inputs.size.toLong())
+        tx.inputs.forEach{chunks+=it.utxo.outpoint.transactionId;chunks+=le32(it.utxo.outpoint.index);chunks+=le64(0);chunks+=le64(it.sequence)}
+        chunks+=le64(tx.outputs.size.toLong())
+        tx.outputs.forEach{chunks+=le64(it.amount);chunks+=script(it.scriptVersion,it.script)}
+        chunks+=le64(tx.lockTime);chunks+=nativeSubnet;chunks+=le64(0);chunks+=le64(0)
+        val digest=Blake2bDigest("TransactionID".toByteArray(Charsets.US_ASCII),32,null,null)
+        chunks.forEach{digest.update(it,0,it.size)}
+        return ByteArray(32).also{digest.doFinal(it,0)}.joinToString(""){"%02x".format(it.toInt() and 255)}
     }
 
     fun p2pkScript(xOnlyPubKey:ByteArray):ByteArray{require(xOnlyPubKey.size==32);return byteArrayOf(0x20)+xOnlyPubKey+byteArrayOf(0xac.toByte())}

@@ -25,7 +25,7 @@ internal object KaspaTransaction {
         val owner=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(from))
         val recipient=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(to))
         require(amount==null||amount>0){"송금 수량은 0보다 커야 합니다"}
-        require(rate.isFinite()&&rate>0){"수수료율 오류"}
+        FeePolicy.rate(rate)
         require(utxos.isNotEmpty()){ "사용 가능한 UTXO가 없습니다" }
         utxos.forEach { u->
             require(u.amount>0&&u.scriptVersion==0&&u.script.contentEquals(owner)){"현재 지갑의 UTXO가 아닙니다"}
@@ -40,9 +40,10 @@ internal object KaspaTransaction {
                 else listOf(KaspaTx.Output(amount,script=recipient),KaspaTx.Output(total-amount-fee,script=owner))
             val provisional=KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it,signatureScript=ByteArray(66))},outputs=outputs)
             val mass=massOf(provisional)
-            require(mass in 1..100_000L){"단일 거래의 네트워크 mass 한도를 초과했습니다"}
+            require(mass in 1..100_000L){"소액 분할 또는 입력 개수로 네트워크 한도를 초과했습니다. 전액 입력을 선택하면 잔액 전체(수수료 제외)를 계산합니다. 부분 송금 수량은 자동으로 바꾸지 않습니다"}
             val needed=java.math.BigDecimal.valueOf(rate).multiply(java.math.BigDecimal.valueOf(mass))
                 .setScale(0,java.math.RoundingMode.CEILING).longValueExact().coerceAtLeast(mass)
+            FeePolicy.check(needed,outputs.first().amount,mass)
             if(fee>=needed)return Prepared(KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it)},outputs=outputs),fee)
             fee=needed
         }
@@ -61,7 +62,26 @@ internal object KaspaTransaction {
 
     private fun feeRate():Double { val o=JSONObject(request("GET","/info/fee-estimate")); val a=o.optJSONArray("normalBuckets"); if(a!=null&&a.length()>0)return a.getJSONObject(0).getDouble("feerate"); return o.optJSONObject("priorityBucket")?.optDouble("feerate",1.0)?:1.0 }
     // /transactions/mass expects SubmitTxModel itself, unlike /transactions which expects {transaction: ...}.
-    private fun mass(tx:KaspaTx.Tx):Long { val o=JSONObject(request("POST","/transactions/mass",txJson(tx).toString())); return o.optLong("mass").takeIf{it>0}?:throw IllegalStateException("mass 계산 실패: $o") }
+    private fun mass(tx:KaspaTx.Tx):Long {
+        val local=KaspaMass.parts(tx)
+        val remote=JSONObject(request("POST","/transactions/mass",txJson(tx).toString()))
+        check(remote.getLong("mass")==local.total&&remote.getLong("compute_mass")==local.compute&&remote.getLong("storage_mass")==local.storage){"노드와 앱의 거래 계산이 다릅니다. 서명하지 않았습니다"}
+        return local.total
+    }
+    fun validateIntent(p:Prepared,from:String,to:String,amount:String) {
+        val recipient=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(to))
+        val owner=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(from))
+        val tx=p.tx
+        require(tx.version==0&&tx.outputs.size in 1..2&&tx.outputs[0].amount==kasToSompi(amount)&&tx.outputs[0].script.contentEquals(recipient)){"확인한 수신 주소 또는 금액과 실제 거래가 다릅니다"}
+        require(tx.outputs.all{it.scriptVersion==0}&&tx.inputs.all{it.utxo.scriptVersion==0&&it.utxo.script.contentEquals(owner)})
+        if(tx.outputs.size==2)require(tx.outputs[1].script.contentEquals(owner)){"거스름돈 주소가 다릅니다"}
+        val fee=tx.inputs.fold(0L){sum,i->Math.addExact(sum,i.utxo.amount)}-tx.outputs.fold(0L){sum,o->Math.addExact(sum,o.amount)}
+        require(fee==p.fee){"확인한 수수료와 실제 거래가 다릅니다"}
+        val mass=KaspaMass.calculate(tx);require(mass<=100_000)
+        FeePolicy.check(fee,tx.outputs[0].amount,mass)
+        require(fee>=mass){"수수료가 네트워크 최소값보다 작습니다"}
+    }
+
 
     private fun txJson(tx:KaspaTx.Tx)=JSONObject().put("version",tx.version)
         .put("inputs",JSONArray().also{a->tx.inputs.forEach{i->a.put(JSONObject().put("previousOutpoint",JSONObject().put("transactionId",toHex(i.utxo.outpoint.transactionId)).put("index",i.utxo.outpoint.index)).put("signatureScript",toHex(i.signatureScript)).put("sequence",i.sequence).put("sigOpCount",i.sigOpCount))}})
@@ -70,6 +90,6 @@ internal object KaspaTransaction {
 
     private fun request(method:String,path:String,body:String?=null)=KaspaNetwork.request(method,path,body)
     internal fun kasToSompi(t:String):Long { val s=t.trim();require(Regex("""\d+(\.\d{1,8})?""").matches(s)){"수량 형식 오류"};val p=s.split('.');val w=p[0].toLong();val f=if(p.size==2)p[1].padEnd(8,'0').toLong() else 0L;return Math.addExact(Math.multiplyExact(w,SOMPI),f).also { require(it>0) {"송금 수량은 0보다 커야 합니다"} } }
-    private fun fromHex(s:String)=ByteArray(s.length/2){i->s.substring(i*2,i*2+2).toInt(16).toByte()}
+    private fun fromHex(s:String):ByteArray {require(s.length%2==0&&Regex("[0-9a-fA-F]*").matches(s));return ByteArray(s.length/2){i->s.substring(i*2,i*2+2).toInt(16).toByte()}}
     private fun toHex(b:ByteArray)=b.joinToString(""){"%02x".format(it.toInt() and 255)}
 }

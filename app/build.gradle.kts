@@ -12,18 +12,19 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.9.0-mainnet"
+        versionCode = 22
+        versionName = "0.9.1-mainnet"
         resValue("string", "app_name", "Kaspa NFC Wallet")
     }
 
     buildTypes {
         create("mainnet") {
-            initWith(getByName("debug"))
+            initWith(getByName("release"))
+            signingConfig = null
             applicationIdSuffix = ".mainnet"
             isDebuggable = false
             resValue("string", "app_name", "Kaspa NFC Wallet")
-            matchingFallbacks += listOf("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 

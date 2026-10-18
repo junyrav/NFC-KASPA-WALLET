@@ -7,6 +7,7 @@ import java.net.URL
 internal object KaspaNetwork {
     const val API="https://api.kaspa.org"
     const val EXPLORER="https://explorer.kaspa.org"
+    class HttpFailure(val code:Int):IllegalStateException("메인넷 요청 실패 · HTTP $code")
     fun request(method:String,path:String,body:String?=null):String {
         require(path.startsWith("/")&&!path.startsWith("//"))
         val c=URL(API+path).openConnection() as HttpURLConnection
@@ -17,7 +18,7 @@ internal object KaspaNetwork {
             if(body!=null){c.doOutput=true;c.setRequestProperty("Content-Type","application/json");c.outputStream.use{it.write(body.toByteArray(Charsets.UTF_8))}}
             val code=c.responseCode
             val text=(if(code in 200..299)c.inputStream else c.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
-            check(code in 200..299){"메인넷 HTTP $code · ${text.take(200)}"}
+            if(code !in 200..299)throw HttpFailure(code)
             return text
         } finally { c.disconnect() }
     }
