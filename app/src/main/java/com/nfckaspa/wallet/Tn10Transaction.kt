@@ -51,7 +51,7 @@ internal object Tn10Transaction {
         .put("lockTime",tx.lockTime).put("subnetworkId","0000000000000000000000000000000000000000")
 
     private fun request(method:String,path:String,body:String?=null):String { require(BASE.contains("api-tn10")); val c=URL(BASE+path).openConnection() as HttpURLConnection;c.connectTimeout=15000;c.readTimeout=20000;c.requestMethod=method;c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","NFC-KASPA-WALLET/0.6.9-TN10");if(body!=null){c.doOutput=true;c.setRequestProperty("Content-Type","application/json");c.outputStream.use{it.write(body.toByteArray())}};return try{val code=c.responseCode;val text=(if(code in 200..299)c.inputStream else c.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty();if(code !in 200..299)throw IllegalStateException("TN10 HTTP $code ${text.take(500)}");text}finally{c.disconnect()} }
-    private fun kasToSompi(t:String):Long { val s=t.trim();require(Regex("\\d+(\\.\\d{1,8})?").matches(s)){"수량 형식 오류"};val p=s.split('.');val w=p[0].toLong();val f=if(p.size==2)p[1].padEnd(8,'0').toLong() else 0L;return Math.addExact(Math.multiplyExact(w,SOMPI),f) }
+    private fun kasToSompi(t:String):Long { val s=t.trim();require(Regex("""\d+(\.\d{1,8})?""").matches(s)){"수량 형식 오류"};val p=s.split('.');val w=p[0].toLong();val f=if(p.size==2)p[1].padEnd(8,'0').toLong() else 0L;return Math.addExact(Math.multiplyExact(w,SOMPI),f) }
     private fun fromHex(s:String)=ByteArray(s.length/2){i->s.substring(i*2,i*2+2).toInt(16).toByte()}
     private fun toHex(b:ByteArray)=b.joinToString(""){"%02x".format(it.toInt() and 255)}
 }
