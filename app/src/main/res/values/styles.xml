@@ -2,5 +2,9 @@
     <style name="Theme.NfcKaspaWallet" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F4FBFA</item>
+        <item name="android:navigationBarColor">#F4FBFA</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#49B8A8</item>
     </style>
 </resources>
