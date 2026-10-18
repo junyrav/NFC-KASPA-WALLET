@@ -2,15 +2,13 @@ package com.nfckaspa.wallet
 
 import org.bouncycastle.crypto.digests.Blake2bDigest
 import org.bouncycastle.crypto.ec.CustomNamedCurves
-import java.io.ByteArrayOutputStream
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
  * Low-level Kaspa transaction signing primitives.
- * Kept separate from UI so the consensus-compatible hashing/signing path can be
- * validated before enabling broadcast. TN10 only for now.
+ * TN10 only for now.
  */
 internal object KaspaTx {
     data class Outpoint(val transactionId: ByteArray, val index: Long)
@@ -21,15 +19,20 @@ internal object KaspaTx {
 
     private val zero32 = ByteArray(32)
     private val nativeSubnet = ByteArray(20)
+    private val signingDomain = "TransactionSigningHash".toByteArray(Charsets.US_ASCII)
 
     private fun le16(v:Int)=byteArrayOf((v and 255).toByte(),((v ushr 8) and 255).toByte())
     private fun le32(v:Long)=ByteArray(4){i->((v ushr (8*i)) and 255).toByte()}
     private fun le64(v:Long)=ByteArray(8){i->((v ushr (8*i)) and 255).toByte()}
     private fun variable(b:ByteArray)=le64(b.size.toLong())+b
 
+    /**
+     * Kaspa's TransactionSigningHash is BLAKE2b-256 keyed with the full
+     * ASCII domain string "TransactionSigningHash". It is NOT BLAKE2b
+     * personalization. Bouncy Castle takes the digest length in bits here.
+     */
     private fun signingHash(vararg chunks:ByteArray):ByteArray{
-        val personal="TransactionSigningHash".toByteArray(Charsets.US_ASCII).copyOf(16)
-        val d=Blake2bDigest(null,32,null,personal)
+        val d=Blake2bDigest(signingDomain,256,null,null)
         chunks.forEach{d.update(it,0,it.size)}
         return ByteArray(32).also{d.doFinal(it,0)}
     }
@@ -80,10 +83,9 @@ internal object KaspaTx {
     fun signAll(tx:Tx,privateKey:ByteArray){
         tx.inputs.forEachIndexed{idx,input->
             val sig=bip340Sign(schnorrSigHash(tx,idx),privateKey)
-            input.signatureScript=byteArrayOf(65)+sig+byteArrayOf(1) // OP_DATA_65 + signature + SIG_HASH_ALL
+            input.signatureScript=byteArrayOf(65)+sig+byteArrayOf(1)
         }
     }
 
-    /** P2PK script for a Kaspa pubkey-address payload (32-byte x-only pubkey). */
     fun p2pkScript(xOnlyPubKey:ByteArray):ByteArray{require(xOnlyPubKey.size==32);return byteArrayOf(0x20)+xOnlyPubKey+byteArrayOf(0xac.toByte())}
 }
