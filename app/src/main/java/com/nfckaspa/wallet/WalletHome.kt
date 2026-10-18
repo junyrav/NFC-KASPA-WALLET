@@ -35,7 +35,7 @@ internal fun WalletHome(
             }
             Spacer(Modifier.weight(1f))
             Surface(color = KaspaTeal, shape = RoundedCornerShape(50)) {
-                Text("TN10", Modifier.padding(horizontal = 14.dp, vertical = 7.dp), color = Color.White, fontWeight = FontWeight.Bold)
+                Text("메인넷", Modifier.padding(horizontal = 14.dp, vertical = 7.dp), color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
 

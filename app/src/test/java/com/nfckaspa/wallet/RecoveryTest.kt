@@ -25,7 +25,7 @@ class RecoveryTest {
     @Test fun generatedAddressRoundTrips() {
         repeat(32) {
             val key=KaspaAddress.newPrivateKey()
-            assertArrayEquals(KaspaAddress.xOnlyPublicKey(key),KaspaAddress.testnetPayload(KaspaAddress.testnet(key)))
+            assertArrayEquals(KaspaAddress.xOnlyPublicKey(key),KaspaAddress.mainnetPayload(KaspaAddress.mainnet(key)))
         }
     }
 }

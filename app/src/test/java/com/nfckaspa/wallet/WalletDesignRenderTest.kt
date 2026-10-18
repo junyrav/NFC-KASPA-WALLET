@@ -34,7 +34,7 @@ class WalletDesignRenderTest {
         }
     }
     @Test fun renderFiveReferenceScreensAndReceive() {
-        val address=KaspaAddress.testnet(ByteArray(32).apply{this[31]=1})
+        val address=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1})
         val base=WalletVisualState(address=address,balance="2,000.00000000 KAS".replace(",",""),to=address,amount="100",fee=10000,
             cards=setOf("A","B","C"),dates=mapOf("A" to "2026.10.17","B" to "2026.10.17","C" to "2026.10.17"),krw=122.8,usd=.09,change=2.5)
         var state by mutableStateOf(base)
@@ -52,7 +52,7 @@ class WalletDesignRenderTest {
         compose.onNodeWithText("오픈소스 라이선스").performScrollTo()
         capture("05-settings-lower")
         compose.runOnIdle{state=base.copy(page="Receive")}
-        compose.onNodeWithContentDescription("TN10 수신 주소 QR").assertIsDisplayed();capture("06-receive")
+        compose.onNodeWithContentDescription("메인넷 수신 주소 QR").assertIsDisplayed();capture("06-receive")
         compose.runOnIdle{state=base.copy(tab="Transactions",history=listOf(
             WalletStore.Transfer(address,"a".repeat(64),address,"100.00000000",10000,1792233120000,"in","accepted"),
             WalletStore.Transfer(address,"b".repeat(64),address,"1.00000000",10000,1792233000000,"out","submitted")

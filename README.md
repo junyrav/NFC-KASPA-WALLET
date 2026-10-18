@@ -1,46 +1,41 @@
-# Kaspa NFC Wallet · v0.8.2 TN10
+# Kaspa NFC Wallet · v0.9.0 Mainnet
 
-Android/Kotlin wallet for Kaspa **TN10 testnet only**. All network clients are fixed to the TN10 API.
+Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name are **Kaspa NFC Wallet**.
 
-## Wallet
-- A public wallet address is saved on creation/recovery and loaded on later launches.
-- Opening the wallet and refreshing its balance do not require an NFC tag.
-- Reference-matched teal wallet: dark gradient balance header, four action tiles, address controls and dated A/B/C card status.
-- Dedicated Send, confirmation, submission-complete and Receive screens, plus grouped Settings and fixed bottom navigation.
-- QR camera scanner, clipboard paste, fee-aware maximum send, TXID copy and TN10 Explorer links.
-- Public market quotes provide indicative KRW/USD conversions only; TN10 coins have no cash value. Currency selection is saved locally.
-- Receive address/QR, exact 8-decimal amount validation, fee preview and send confirmation.
-- Sending requires one registered NFC card followed by strong Android biometric authentication.
-- Transaction history contains submissions made by this app on this device; submission is not a confirmation count or complete network history.
+## Network and installation
+- `kaspa:` P2PK mainnet addresses with checksum validation. Testnet, ECDSA and script-hash recipient addresses are rejected.
+- Balance, UTXOs, transaction history, fee estimation, mass calculation and broadcast use `https://api.kaspa.org`. Explorer links use `https://explorer.kaspa.org`.
+- The `mainnet` build installs as `com.nfckaspa.wallet.mainnet` alongside the earlier TN10 Preview app. It is not debuggable and does not import, overwrite or delete the Preview app's data.
+- Mainnet public metadata and Android Keystore encryption use dedicated namespaces. Testnet coins are not converted into mainnet KAS.
+- New wallets require a recovery password and distinct NFC cards. Existing compatible cards can be explicitly recovered with two card slots and the recovery password. A different Android app package cannot decrypt the old app's daily payload: re-register after recovery to enable daily signing.
+- Re-registering a physical card writes its daily payload. To retain separate independently generated wallets, use separate card sets.
+
+## Wallet and transfers
+- Teal wallet UI, square-ended NFC logo, Send/confirmation/submission/Receive screens, QR scanning, copy/paste and grouped settings.
+- Public address is persisted; opening the wallet or checking balances/history needs no card.
+- Incoming/outgoing network history is merged by wallet and TXID with local submissions, cached for later use, refreshed on opening history and paged with “이전 거래 더 보기”. Network approval is distinguished from submission.
+- Exact integer sompi amounts and indicative KRW/USD market conversions.
+- Normal and maximum-send fees are calculated against the final outputs, including change-dependent mass. Invalid fee rates, foreign/duplicate UTXOs, insufficient funds and transactions exceeding 100,000 mass are rejected.
+- Version-0 native P2PK signing is checked against Kaspa Core signature-hash and BIP-340 vectors. Each generated signature is verified locally. Inputs must belong to the selected wallet.
+- Sending requires one wallet card and strong biometric authentication after confirming the destination, amount and fee.
 
 ## Cards and recovery
-- Register three distinct MIFARE Classic cards before using a new wallet. At least two registered cards are required to enable Send/Receive.
-- Recovery uses two different card slots plus the recovery password.
-- Recovery reconstructs the **original sharing polynomial**. Re-registering one card therefore preserves compatibility with unchanged cards.
-- After an app restart, card registration requires unlocking with two cards and the recovery password. The public wallet remains available without this step.
-- Writes are read back and compared before registration is reported complete. NFC I/O runs off the UI thread and retries up to five times.
-- The app persists public address, registration metadata and local transfer history only. Private keys, plaintext recovery shares and passwords are not stored in app preferences.
-- A newly generated key exists only in memory until cards are registered. Do not close the app during initial card registration.
-- Android Keystore encryption is bound to the phone. After reinstalling/changing phones, recover with two cards and re-register cards to refresh daily payloads.
+- Register three distinct MIFARE Classic cards. At least two registered cards are required for Send/Receive.
+- Recovery uses two different slots and the recovery password, preserving the original Shamir sharing polynomial and compatibility with untouched cards.
+- NFC I/O retries up to five times. Writes are read back and compared before registration succeeds.
+- Preferences contain public addresses, card metadata and transfer records only. Private keys, plaintext recovery shares and passwords are not persisted there.
+- Newly generated keys remain in memory until backed up to cards. Keep the app open during initial registration.
+- Android Keystore encryption is bound to the app/phone. After reinstalling or changing phones/packages, recover with two cards and re-register daily payloads.
 
-## Build and checks
+## Build and validation
 JDK 17, Gradle 8.9, Android SDK 35:
 
 ```sh
-gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+gradle :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleMainnet
 ```
 
-Automated checks cover all recovery pairs and unchanged-card compatibility, invalid shares, amount precision/overflow, address round trips, persistence across new contexts, and simulated activity launch/recreation/navigation/Send/Receive screens.
+CI attaches unit test results, lint reports and deterministic native Compose screen renders. Tests cover official address/signing vectors, input ownership, fee convergence, maximum sends, network separation, incoming/outgoing history, storage, recovery and UI navigation.
 
-Native Compose render images for the reference screens are attached to CI as `wallet-visual-review`. Screenshot fixtures are deterministic test data, not a real wallet.
+Automated validation does not broadcast a funded mainnet transaction or substitute for physical NFC/biometric verification. No user funds are moved by CI.
 
-Physical NFC reliability, Android Keystore/biometric behavior and a complete TN10 transfer require a real NFC-capable Android phone. No mainnet support is enabled.
-
-Install updates in place without uninstalling. CI restores a stable debug signing key to preserve app data and device Keystore access between builds.
-
-## Preview package and signing migration
-The `preview` build installs alongside the existing app as `com.nfckaspa.wallet.preview`, with the same wallet functionality. It does not read or delete the existing app's data. Recover with two NFC cards and the recovery password to load the wallet in this package. Signing in a different package requires re-registering its daily card payloads after recovery. Recovery shares are preserved; an old app's daily payload is not shared across Android app UIDs.
-
-Earlier CI builds cached `~/.android/debug.keystore`, but AGP writes the key under `~/.config/.android/debug.keystore` on this runner. Those older signing keys were not retained. The workflow now caches both paths and reports its certificate. A legacy APK signed with an unretained key cannot receive a normal same-package update from a different certificate; do not uninstall it just to review the new design. Use the side-by-side preview instead.
-
-User-delivered preview APKs are signed after CI using a retained private signing key. This avoids depending on expiring CI caches. The key is kept privately with project deliverables and is never committed to this public repository. Raw Actions debug/preview APKs use the runner's debug certificate; use the separately prepared signed APK for subsequent updates of the delivered preview app.
+Delivered mainnet APKs are signed after CI using the retained private delivery key, which is not committed. Raw Actions APKs use the runner certificate. Future delivered mainnet APKs retain the same package and private certificate for in-place updates.

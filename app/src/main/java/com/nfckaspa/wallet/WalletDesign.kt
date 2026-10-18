@@ -171,12 +171,12 @@ private fun total(s:WalletVisualState):String = runCatching {
         Column(Modifier.padding(padding).fillMaxSize().background(background).verticalScroll(scroll).padding(horizontal=18.dp).padding(bottom=16.dp),verticalArrangement=Arrangement.spacedBy(if(s.tab=="Settings")5.dp else if(home)12.dp else 10.dp)) {
             if(s.address.isBlank()) {
                 Spacer(Modifier.height(24.dp));KaspaBrand(Modifier.size(64.dp).align(Alignment.CenterHorizontally))
-                Text("NFC KASPA WALLET",Modifier.align(Alignment.CenterHorizontally),fontWeight=FontWeight.Bold,fontSize=23.sp,color=Ink)
+                Text("Kaspa NFC Wallet",Modifier.align(Alignment.CenterHorizontally),fontWeight=FontWeight.Bold,fontSize=23.sp,color=Ink)
                 Spacer(Modifier.height(10.dp))
                 WhiteCard {Text("지갑 시작하기",fontSize=22.sp,fontWeight=FontWeight.Bold);Text("새 지갑을 만들거나 NFC 카드 2장으로 기존 지갑을 복구하세요.",color=Muted)
-                    if(BuildConfig.APPLICATION_ID.endsWith(".preview")) Hint("기존 지갑은 카드로 복구하세요.","이 앱은 별도 설치형입니다. 기존 지갑이 있다면 새로 생성하지 마세요.")
+                    Hint("Kaspa 메인넷 지갑", "실제 KAS를 사용하는 지갑입니다. 복구 비밀번호와 NFC 카드를 안전하게 보관하세요.")
                     OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),singleLine=true,enabled=!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
-                    Primary("새 Testnet 지갑 생성",a.create,s.password.length>=8&&!s.busy&&!s.recovery)
+                    Primary("새 메인넷 지갑 생성",a.create,s.password.length>=8&&!s.busy&&!s.recovery)
                     OutlinedButton(onClick=a.recover,enabled=s.password.length>=8&&!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth().height(50.dp)){Text("기존 카드로 복구")}
                 }
                 Hint("Your Keys on NFC","Secure · Simple · Yours")
@@ -204,7 +204,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     Spacer(Modifier.height(4.dp))
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
         KaspaBrand(Modifier.size(46.dp))
-        Column(Modifier.weight(1f)){Text("NFC KASPA WALLET",fontSize=16.sp,fontWeight=FontWeight.SemiBold,color=Color.White);Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(9.dp)){Text("Testnet (TN10)",color=Color(0xFFD0EEE8),fontSize=13.sp);Box(Modifier.size(7.dp).background(Aqua,CircleShape))}}
+        Column(Modifier.weight(1f)){Text("Kaspa NFC Wallet",fontSize=16.sp,fontWeight=FontWeight.SemiBold,color=Color.White);Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(9.dp)){Text("Mainnet",color=Color(0xFFD0EEE8),fontSize=13.sp);Box(Modifier.size(7.dp).background(Aqua,CircleShape))}}
         IconButton(onClick={a.navigate("Settings")}){Icon(Icons.Outlined.Settings,"설정 열기",tint=Color.White)}
     }
     Surface(color=Color(0xFF003E3D).copy(alpha=.58f),shape=Corner,border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFF47B7A6).copy(alpha=.7f))) {
@@ -232,7 +232,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         }
     }
     WhiteCard {
-        Text("내 주소 (kaspatest)",fontWeight=FontWeight.SemiBold,fontSize=13.sp,color=Ink)
+        Text("내 주소 (kaspa)",fontWeight=FontWeight.SemiBold,fontSize=13.sp,color=Ink)
         Row(Modifier.fillMaxWidth().background(Color(0xFFF6FAF9),RoundedCornerShape(8.dp)),verticalAlignment=Alignment.CenterVertically){Text(shortKaspaAddress(s.address),Modifier.weight(1f).padding(start=8.dp),fontSize=13.sp,maxLines=1);IconButton(onClick={a.copy(s.address)}){Icon(Icons.Outlined.ContentCopy,"주소 복사",Modifier.size(19.dp),tint=Ink)};IconButton(onClick={a.route("Receive")}){Icon(Icons.Outlined.QrCode2,"수신 QR 보기",Modifier.size(22.dp),tint=Ink)}}
     }
     WhiteCard {
@@ -249,13 +249,13 @@ private fun total(s:WalletVisualState):String = runCatching {
         }
     }
     Hint("NFC 카드로 안전하게 자산을 관리하세요.","2-of-3 복구 지원 · NFC + 생체인증")
-    Text("TN10 테스트 코인 · 원화/달러는 시장 시세 참고 환산",fontSize=10.sp,color=Muted,modifier=Modifier.align(Alignment.CenterHorizontally))
+    Text("Mainnet · 원화/달러는 시장 시세 참고 환산",fontSize=10.sp,color=Muted,modifier=Modifier.align(Alignment.CenterHorizontally))
 }
 
 @Composable private fun SendDesign(s:WalletVisualState,a:DesignActions) {
     Title("KAS 보내기",{a.route("")},enabled=!s.busy)
-    Text("받는 주소 (kaspatest)",fontSize=13.sp,color=Ink)
-    OutlinedTextField(s.to,a.changeTo,modifier=Modifier.fillMaxWidth(),placeholder={Text("kaspatest: 주소를 입력하세요",fontSize=13.sp)},shape=RoundedCornerShape(14.dp),textStyle=LocalTextStyle.current.copy(fontSize=13.sp),enabled=!s.busy,
+    Text("받는 주소 (kaspa)",fontSize=13.sp,color=Ink)
+    OutlinedTextField(s.to,a.changeTo,modifier=Modifier.fillMaxWidth(),placeholder={Text("kaspa: 주소를 입력하세요",fontSize=13.sp)},shape=RoundedCornerShape(14.dp),textStyle=LocalTextStyle.current.copy(fontSize=13.sp),enabled=!s.busy,
         trailingIcon={Row{IconButton(onClick=a.scan){Icon(Icons.Outlined.QrCodeScanner,"수신 주소 스캔",Modifier.size(20.dp))};IconButton(onClick={a.setting("paste")}){Icon(Icons.Outlined.ContentPaste,"주소 붙여넣기",Modifier.size(20.dp))}}},colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,unfocusedContainerColor=Color.White))
     Spacer(Modifier.height(5.dp));Text("보낼 수량 (KAS)",fontSize=14.sp,fontWeight=FontWeight.Medium,color=Ink)
     OutlinedTextField(s.amount,a.changeAmount,modifier=Modifier.fillMaxWidth(),placeholder={Text("0",fontSize=34.sp,fontWeight=FontWeight.Bold)},textStyle=LocalTextStyle.current.copy(fontSize=34.sp,fontWeight=FontWeight.Bold),suffix={Text("KAS",color=Teal)},singleLine=true,enabled=!s.busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),shape=RoundedCornerShape(14.dp),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,unfocusedContainerColor=Color.White))
@@ -284,7 +284,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     Primary(if(s.awaiting)"NFC 카드를 태그하세요" else "1. NFC 카드 태그 / 생체인증",a.send,!s.busy&&!s.awaiting,Icons.Outlined.Nfc)
     Primary(if(s.busy)"2. 서명 및 전송 중…" else "2. 서명 및 네트워크 전송",{},false)
     if(s.sendInfo.isNotBlank())Text(s.sendInfo,fontSize=12.sp,color=Muted)
-    Text("TN10 테스트넷 · 제출 후 블록 확인이 필요합니다",fontSize=11.sp,color=Muted)
+    Text("Mainnet · 제출 후 네트워크 승인을 확인하세요",fontSize=11.sp,color=Muted)
 }
 
 @Composable private fun ColumnScope.SuccessDesign(s:WalletVisualState,a:DesignActions) {
@@ -312,11 +312,11 @@ private fun total(s:WalletVisualState):String = runCatching {
     WhiteCard {
         Text("내 지갑 주소",fontSize=18.sp,fontWeight=FontWeight.Bold,color=Ink)
         val bitmap=remember(s.address){qr(s.address)}
-        Image(bitmap.asImageBitmap(),"TN10 수신 주소 QR",Modifier.size(242.dp).align(Alignment.CenterHorizontally))
+        Image(bitmap.asImageBitmap(),"메인넷 수신 주소 QR",Modifier.size(242.dp).align(Alignment.CenterHorizontally))
         Text(s.address,fontSize=13.sp,color=Ink)
         Primary("주소 복사",{a.copy(s.address)},icon=Icons.Outlined.ContentCopy)
     }
-    Hint("Kaspa Testnet (TN10) 전용","메인넷 KAS를 보내지 마세요.")
+    Hint("Kaspa 메인넷 전용","kaspa: 주소로 메인넷 KAS만 보내세요.")
 }
 
 @Composable private fun SettingsGroup(label:String,content:@Composable ColumnScope.()->Unit) {
@@ -347,7 +347,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         SettingsRow(Icons.Outlined.AddModerator,"2-of-3 복구 테스트"){a.setting("recovery")}
     }
     SettingsGroup("네트워크") {
-        SettingsRow(Icons.Outlined.Public,"네트워크","Kaspa Testnet (TN10)"){a.setting("network")}
+        SettingsRow(Icons.Outlined.Public,"네트워크","Kaspa Mainnet"){a.setting("network")}
         SettingsRow(Icons.Outlined.Dns,"노드","공식 API (기본값)"){a.setting("node")}
     }
     SettingsGroup("앱 정보") {
@@ -381,7 +381,7 @@ private fun total(s:WalletVisualState):String = runCatching {
 @Composable private fun TransactionsDesign(s:WalletVisualState,a:DesignActions) {
     Title("거래내역",{a.navigate("Wallet")})
     Row(verticalAlignment=Alignment.CenterVertically) {
-        Text("TN10 입금 · 출금 내역",Modifier.weight(1f),fontSize=12.sp,color=Muted)
+        Text("메인넷 입금 · 출금 내역",Modifier.weight(1f),fontSize=12.sp,color=Muted)
         TextButton(onClick=a.historyRefresh,enabled=!s.historyLoading){Text(if(s.historyLoading)"조회 중…" else "새로고침")}
     }
     if(s.historyError.isNotBlank())Text(s.historyError,fontSize=12.sp,color=Muted)

@@ -47,7 +47,7 @@ internal fun WalletHeader(balance: String, address: String) {
             Text("Kaspa NFC Wallet", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = KaspaInk)
             Spacer(Modifier.weight(1f))
             Surface(color = KaspaTeal, shape = RoundedCornerShape(50)) {
-                Text("TN10", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color.White, fontWeight = FontWeight.Bold)
+                Text("메인넷", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -114,7 +114,7 @@ private fun SecurityChip(label: String, active: Boolean) {
 @Composable
 internal fun VersionFooter() {
     Text(
-        "v${BuildConfig.VERSION_NAME} · TN10 TESTNET ONLY",
+        "v${BuildConfig.VERSION_NAME} · Kaspa Mainnet",
         style = MaterialTheme.typography.bodySmall,
         color = KaspaTealDark
     )

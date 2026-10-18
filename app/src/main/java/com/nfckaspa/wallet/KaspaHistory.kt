@@ -5,24 +5,17 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
-import java.net.HttpURLConnection
-import java.net.URL
 
-/** Public TN10 indexer data; never requires a card or a signing key. */
-internal object Tn10History {
+/** Public mainnet indexer data; never requires a card or a signing key. */
+internal object KaspaHistory {
     const val PAGE_SIZE = 50
     data class Page(val records:List<WalletStore.Transfer>,val count:Int)
     suspend fun fetch(address:String,offset:Int=0):Page = withContext(Dispatchers.IO) {
-        KaspaAddress.testnetPayload(address)
+        KaspaAddress.mainnetPayload(address)
         require(offset>=0)
-        val connection=URL("https://api-tn10.kaspa.org/addresses/$address/full-transactions?limit=$PAGE_SIZE&offset=$offset&resolve_previous_outpoints=full").openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout=15000;connection.readTimeout=20000
-            connection.setRequestProperty("Accept","application/json")
-            check(connection.responseCode==200){"TN10 HTTP ${connection.responseCode}"}
-            parse(address,connection.inputStream.bufferedReader().use{it.readText()})
-        } finally { connection.disconnect() }
+        parse(address,KaspaNetwork.request("GET","/addresses/$address/full-transactions?limit=$PAGE_SIZE&offset=$offset&resolve_previous_outpoints=full"))
     }
+
     fun parse(address:String,json:String):Page {
         val array=JSONArray(json)
         val records=(0 until array.length()).map { index ->

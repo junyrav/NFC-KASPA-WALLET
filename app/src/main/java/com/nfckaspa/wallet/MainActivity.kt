@@ -85,7 +85,7 @@ private data class Rec(val slot:Slot,val daily:ByteArray,val recovery:ByteArray)
 private sealed class ReadResult{data class Ok(val rec:Rec):ReadResult();data class Error(val msg:String):ReadResult()}
 
 internal object Crypto{
-    private val rng=SecureRandom();private const val KS="AndroidKeyStore";private const val ALIAS="nkw_v05_daily"
+    private val rng=SecureRandom();private const val KS="AndroidKeyStore";private const val ALIAS="nkw_mainnet_daily_v1"
     private fun dev():SecretKey{val s=KeyStore.getInstance(KS).apply{load(null)};(s.getKey(ALIAS,null) as? SecretKey)?.let{return it};val g=KeyGenerator.getInstance("AES",KS);g.init(KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).setUserAuthenticationRequired(true).apply { if(android.os.Build.VERSION.SDK_INT>=30) setUserAuthenticationParameters(30,KeyProperties.AUTH_BIOMETRIC_STRONG) else @Suppress("DEPRECATION") setUserAuthenticationValidityDurationSeconds(30) }.build());return g.generateKey()}
     fun random(n:Int)=ByteArray(n).also{rng.nextBytes(it)}
     fun dailyEnc(p:ByteArray):ByteArray{val c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,dev());return c.iv+c.doFinal(p)}
@@ -129,16 +129,12 @@ private object Card{
 }
 
 
-private object Tn10 {
+private object MainnetBalance {
     suspend fun balance(address: String): String = withContext(Dispatchers.IO) {
-        KaspaAddress.testnetPayload(address)
-        val c = URL("https://api-tn10.kaspa.org/addresses/$address/balance").openConnection() as HttpURLConnection
-        c.connectTimeout = 10000; c.readTimeout = 10000
-        try {
-            check(c.responseCode in 200..299) { "잔액 조회 HTTP ${c.responseCode}" }
-            val n = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).getLong("balance")
-            java.math.BigDecimal.valueOf(n, 8).toPlainString() + " KAS"
-        } finally { c.disconnect() }
+        KaspaAddress.mainnetPayload(address)
+        val n=JSONObject(KaspaNetwork.request("GET","/addresses/$address/balance")).getLong("balance")
+        require(n>=0){"잔액 응답 오류"}
+        java.math.BigDecimal.valueOf(n,8).toPlainString()+" KAS"
     }
 }
 
@@ -172,7 +168,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     var history by remember { mutableStateOf(WalletStore.history(context)) }
     var sendTo by rememberSaveable { mutableStateOf("") }
     var sendAmount by rememberSaveable { mutableStateOf("") }
-    var prepared by remember { mutableStateOf<Tn10Transaction.Prepared?>(null) }
+    var prepared by remember { mutableStateOf<KaspaTransaction.Prepared?>(null) }
     var sendInfo by remember { mutableStateOf("") }
     var awaitingSendCard by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -190,11 +186,11 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         val value=result.contents
         if(value!=null) {
             val parsed=value.trim().substringBefore('?')
-            if(runCatching{KaspaAddress.testnetPayload(parsed)}.isSuccess){sendTo=parsed;prepared=null;displayedFee=null;sendAll=false;inputRevision++;tab="Wallet";page="Send"}
-            else Toast.makeText(context,"TN10 수신 주소 QR이 아닙니다",Toast.LENGTH_LONG).show()
+            if(runCatching{KaspaAddress.mainnetPayload(parsed)}.isSuccess){sendTo=parsed;prepared=null;displayedFee=null;sendAll=false;inputRevision++;tab="Wallet";page="Send"}
+            else Toast.makeText(context,"메인넷 수신 주소 QR이 아닙니다",Toast.LENGTH_LONG).show()
         }
     }
-    fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa TN10 주소 QR을 스캔하세요").setBeepEnabled(false).setOrientationLocked(false))}
+    fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa 메인넷 주소 QR을 스캔하세요").setBeepEnabled(false).setOrientationLocked(false))}
 
     var historyLoading by remember { mutableStateOf(false) }
     var historyError by remember { mutableStateOf("") }
@@ -207,12 +203,12 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         historyLoading=true;historyError=""
         scope.launch {
             try {
-                val result=Tn10History.fetch(requested,offset)
+                val result=KaspaHistory.fetch(requested,offset)
                 if(address==requested) {
                     WalletStore.mergeHistory(context,result.records)
                     history=WalletStore.history(context)
                     historyOffset=offset+result.count
-                    historyMore=result.count==Tn10History.PAGE_SIZE
+                    historyMore=result.count==KaspaHistory.PAGE_SIZE
                 }
             } catch(e:Exception) { if(address==requested)historyError="거래내역 조회 실패 · 다시 시도해 주세요 (${e.message})" }
             finally { historyLoading=false }
@@ -224,20 +220,20 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         val requested = address
         refreshing = true
         scope.launch {
-            try { val value = Tn10.balance(requested); if(address == requested) balance = value }
+            try { val value = MainnetBalance.balance(requested); if(address == requested) balance = value }
             catch(e:Exception) { status = "잔액 조회 실패 · ${e.message}" }
             finally { refreshing = false }
         }
     }
     fun saveWallet(key: ByteArray) {
-        val next = KaspaAddress.testnet(key)
+        val next = KaspaAddress.mainnet(key)
         check(address.isBlank() || address == next) { "현재 지갑과 다른 카드입니다" }
         WalletStore.saveAddress(context, next)
         address = next
         secret?.fill(0); secret = key.copyOf()
     }
     fun copy(text:String) {
-        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Kaspa TN10",text))
+        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Kaspa 메인넷",text))
         status = "복사했습니다"
         Toast.makeText(context,"복사했습니다",Toast.LENGTH_SHORT).show()
     }
@@ -263,7 +259,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         busy=true; sendInfo="UTXO와 수수료를 확인하고 있습니다"
         scope.launch {
             try {
-                val p=if(sendAll) Tn10Transaction.prepareMaximum(from,to) else Tn10Transaction.prepare(from,to,amount)
+                val p=if(sendAll) KaspaTransaction.prepareMaximum(from,to) else KaspaTransaction.prepare(from,to,amount)
                 if(revision==inputRevision && address==from) {
                     prepared=p;displayedFee=p.fee
                     if(sendAll)sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString()
@@ -312,14 +308,14 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                     try {
                                         val unlocked=try{Crypto.dailyDec(rec.daily)}catch(e:Exception){throw IllegalStateException("이 앱에서 카드 재등록이 필요합니다. 카드관리에서 카드 2장으로 잠금을 해제한 뒤 재등록하세요.",e)}
                                         key=unlocked
-                                        check(KaspaAddress.testnet(unlocked)==address) { "현재 지갑의 카드가 아닙니다" }
+                                        check(KaspaAddress.mainnet(unlocked)==address) { "현재 지갑의 카드가 아닙니다" }
                                         val p=prepared?:error("송금 준비가 만료되었습니다")
                                         sendInfo="서명 중입니다"
                                         val signingKey=unlocked
-                                        val request=withContext(Dispatchers.Default) { KaspaTx.signAll(p.tx,signingKey); Tn10Transaction.signedRequest(p.tx) }
+                                        val request=withContext(Dispatchers.Default) { KaspaTx.signAll(p.tx,signingKey); KaspaTransaction.signedRequest(p.tx) }
                                         unlocked.fill(0); key=null
-                                        prepared=null; sendInfo="TN10 네트워크에 제출 중입니다"
-                                        val txid=Tn10Broadcast.postTransaction(request)
+                                        prepared=null; sendInfo="메인넷 네트워크에 제출 중입니다"
+                                        val txid=KaspaBroadcast.postTransaction(request)
                                         resultTx=txid;displayedFee=p.fee;sentAt=System.currentTimeMillis();page="Success"
                                         WalletStore.record(context,address,txid,sendTo,sendAmount,p.fee)
                                         history=WalletStore.history(context)
@@ -374,9 +370,9 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             "theme" to ("테마" to "첨부 시안의 Kaspa Teal 테마가 적용되어 있습니다."),
             "biometric" to ("생체인증" to "송금 서명은 등록된 NFC 카드와 강한 생체인증을 모두 완료해야 진행됩니다."),
             "lock" to ("개인키 잠금" to "개인키는 NFC 카드의 암호문으로 보관됩니다. 앱에는 주소와 공개 메타데이터만 저장합니다."),
-            "network" to ("네트워크" to "Kaspa Testnet (TN10) 전용입니다. 메인넷 전송은 지원하지 않습니다."),
-            "node" to ("노드" to "https://api-tn10.kaspa.org · 기본 공식 REST API"),
-            "version" to ("앱 정보" to "NFC KASPA WALLET\nv${BuildConfig.VERSION_NAME}\nYour Keys on NFC · Secure · Simple · Yours"),
+            "network" to ("네트워크" to "Kaspa 메인넷 전용입니다. kaspa: 주소로 실제 KAS를 송수신합니다."),
+            "node" to ("노드" to "https://api.kaspa.org · 기본 공식 REST API"),
+            "version" to ("앱 정보" to "Kaspa NFC Wallet\nv${BuildConfig.VERSION_NAME}\nYour Keys on NFC · Secure · Simple · Yours"),
             "licenses" to ("오픈소스 라이선스" to "AndroidX / Jetpack Compose · Apache 2.0\nZXing / ZXing Android Embedded · Apache 2.0\nBouncy Castle · MIT\nRobolectric (검증 도구) · MIT"),
             "backup" to ("카드 등록 필요" to "NFC 카드 2장 이상을 등록한 뒤 송금·수신할 수 있습니다.")
         )
@@ -386,7 +382,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                 listOf("KRW" to "대한민국 원 · KRW","USD" to "미국 달러 · USD").forEach { (id,label)->
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){RadioButton(selected=currency==id,onClick={currency=id;WalletStore.saveCurrency(context,id);settingDialog=""});Text(label)}
                 }
-                Text("시장 시세 참고 환산입니다. TN10 코인은 현금 가치가 없습니다.",fontSize=12.sp)
+                Text("원화·달러 환산은 시장 시세를 기준으로 한 참고 금액입니다.",fontSize=12.sp)
             } else Text(message?.second.orEmpty())},confirmButton={TextButton(onClick={settingDialog=""}){Text("확인")}})
     }
     val dates=cardMarks.associateWith { WalletStore.cardDate(context,it) }
@@ -409,12 +405,12 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         cancel={cancelOperation()},
         max={if(sendTo.isBlank())sendInfo="전액 입력 전에 받는 주소를 입력하세요" else {
             busy=true;sendInfo="전액 전송 수수료 계산 중…"
-            scope.launch{try{val p=Tn10Transaction.prepareMaximum(address,sendTo);sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString();sendAll=true;displayedFee=p.fee;prepared=p;sendInfo="수수료를 제외한 최대 수량입니다"}catch(e:Exception){sendInfo="계산 실패 · ${e.message}"}finally{busy=false}}
+            scope.launch{try{val p=KaspaTransaction.prepareMaximum(address,sendTo);sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString();sendAll=true;displayedFee=p.fee;prepared=p;sendInfo="수수료를 제외한 최대 수량입니다"}catch(e:Exception){sendInfo="계산 실패 · ${e.message}"}finally{busy=false}}
         }},
         password={if(!busy&&!recoveryMode)pass=it},
         create={val key=KaspaAddress.newPrivateKey();try{saveWallet(key);shares=Shares.split(key);status="지갑 생성 완료 · 카드 A/B/C를 모두 등록하세요";tab="Cards"}catch(e:Exception){status="처리 실패 · ${e.message}"}finally{key.fill(0)}},
         recover={recoveryMode=true;status="서로 다른 등록 카드 2장을 태그하세요"},register={prepareCard(it)},
-        explorer={id->if(Regex("[0-9a-fA-F]{64}").matches(id))runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://explorer-tn10.kaspa.org/txs/$id"))) }},
+        explorer={id->if(Regex("[0-9a-fA-F]{64}").matches(id))runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("${KaspaNetwork.EXPLORER}/txs/$id"))) }},
         setting={id->when(id){
             "paste"->{val cm=context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;sendTo=cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty();prepared=null;displayedFee=null;sendAll=false;inputRevision++}
             "recovery"->{if(cardMarks.size<2)settingDialog="backup" else {secret?.fill(0);secret=null;shares.values.forEach{it.fill(0)};shares=emptyMap();tab="Cards";status="복구 비밀번호를 입력하고 카드 2장으로 복구를 검증하세요"}}

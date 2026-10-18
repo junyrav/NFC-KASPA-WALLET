@@ -6,13 +6,13 @@ import org.json.JSONObject
 
 /** Public metadata only. No private keys, recovery shares or passwords are persisted. */
 internal object WalletStore {
-    private const val PREFS = "kaspa_nfc_wallet"
+    private const val PREFS = "kaspa_nfc_wallet_mainnet"
     private fun prefs(c:Context)=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
     data class Transfer(val wallet:String,val txid:String,val to:String,val amount:String,val fee:Long,val time:Long,val direction:String="out",val state:String="submitted")
-    fun loadAddress(c:Context):String = prefs(c).getString("tn10_wallet_address","").orEmpty().takeIf { runCatching { KaspaAddress.testnetPayload(it) }.isSuccess }.orEmpty()
+    fun loadAddress(c:Context):String = prefs(c).getString("mainnet_wallet_address","").orEmpty().takeIf { runCatching { KaspaAddress.mainnetPayload(it) }.isSuccess }.orEmpty()
     fun saveAddress(c:Context,address:String) {
-        KaspaAddress.testnetPayload(address)
-        check(prefs(c).edit().putString("tn10_wallet_address",address).commit()) { "지갑 주소를 저장하지 못했습니다" }
+        KaspaAddress.mainnetPayload(address)
+        check(prefs(c).edit().putString("mainnet_wallet_address",address).commit()) { "지갑 주소를 저장하지 못했습니다" }
     }
     fun loadCards(c:Context):Set<String> = prefs(c).getStringSet("registered_cards",emptySet()).orEmpty().toSet()
     fun saveCards(c:Context,cards:Set<String>) {
@@ -25,7 +25,7 @@ internal object WalletStore {
     fun saveCurrency(c:Context,value:String){require(value in listOf("KRW","USD"));prefs(c).edit().putString("currency",value).apply()}
     fun cardOwner(c:Context,id:String):String? = prefs(c).getString("card_uid_$id",null)
     fun bindCard(c:Context,id:String,slot:String) { prefs(c).edit().putString("card_uid_$id",slot).apply() }
-    fun clearUnbacked(c:Context) { check(loadCards(c).isEmpty()); prefs(c).edit().remove("tn10_wallet_address").apply() }
+    fun clearUnbacked(c:Context) { check(loadCards(c).isEmpty()); prefs(c).edit().remove("mainnet_wallet_address").apply() }
     fun history(c:Context):List<Transfer> = runCatching {
         val a=JSONArray(prefs(c).getString("transfers","[]"))
         (0 until a.length()).map { i -> val o=a.getJSONObject(i); Transfer(o.getString("wallet"),o.getString("txid"),o.getString("to"),o.getString("amount"),o.getLong("fee"),o.getLong("time"),o.optString("direction","out"),o.optString("state","submitted")) }

@@ -12,16 +12,16 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[28])
-class Tn10HistoryTest {
-    private val wallet="kaspatest:wallet"
-    private val other="kaspatest:sender"
+class KaspaHistoryTest {
+    private val wallet="kaspa:wallet"
+    private val other="kaspa:sender"
     private fun output(owner:String,amount:Long)=JSONObject().put("script_public_key_address",owner).put("amount",amount)
     private fun input(owner:String,amount:Long)=JSONObject().put("previous_outpoint_resolved",output(owner,amount))
     private fun transaction(id:String,inputs:List<JSONObject>,outputs:List<JSONObject>,accepted:Boolean=true)=JSONObject()
         .put("transaction_id",id).put("block_time",1700000000000L).put("is_accepted",accepted)
         .put("inputs",JSONArray(inputs)).put("outputs",JSONArray(outputs))
-    private fun parse(tx:JSONObject)=Tn10History.parse(wallet,JSONArray().put(tx).toString()).records.single()
-    @Before fun clear() { RuntimeEnvironment.getApplication().getSharedPreferences("kaspa_nfc_wallet",0).edit().clear().commit() }
+    private fun parse(tx:JSONObject)=KaspaHistory.parse(wallet,JSONArray().put(tx).toString()).records.single()
+    @Before fun clear() { RuntimeEnvironment.getApplication().getSharedPreferences("kaspa_nfc_wallet_mainnet",0).edit().clear().commit() }
     @Test fun externalDepositIncludesAllWalletOutputsExactly() {
         val record=parse(transaction("deposit",listOf(input(other,100000010L)),listOf(output(wallet,10000000),output(wallet,90000000))))
         assertEquals("in",record.direction);assertEquals("1.00000000",record.amount)
@@ -56,8 +56,8 @@ class Tn10HistoryTest {
     }
     @Test fun paginationCountsRawRecordsAndEmptyPage() {
         val tx=transaction("deposit",listOf(input(other,100000010)),listOf(output(wallet,100000000)))
-        val page=Tn10History.parse(wallet,JSONArray().apply{repeat(50){put(JSONObject(tx.toString()).put("transaction_id","tx$it"))}}.toString())
+        val page=KaspaHistory.parse(wallet,JSONArray().apply{repeat(50){put(JSONObject(tx.toString()).put("transaction_id","tx$it"))}}.toString())
         assertEquals(50,page.count);assertEquals(50,page.records.size)
-        assertEquals(0,Tn10History.parse(wallet,"[]").count)
+        assertEquals(0,KaspaHistory.parse(wallet,"[]").count)
     }
 }

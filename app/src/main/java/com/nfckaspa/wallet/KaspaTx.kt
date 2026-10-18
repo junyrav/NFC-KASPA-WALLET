@@ -8,7 +8,7 @@ import java.security.SecureRandom
 
 /**
  * Low-level Kaspa transaction signing primitives.
- * TN10 only for now.
+ * Version-0 native P2PK transactions on Kaspa mainnet.
  */
 internal object KaspaTx {
     data class Outpoint(val transactionId: ByteArray, val index: Long)
@@ -63,12 +63,11 @@ internal object KaspaTx {
     private fun tagged(tag:String,msg:ByteArray):ByteArray{val t=sha(tag.toByteArray(Charsets.US_ASCII));return sha(t+t+msg)}
 
     /** BIP-340 Schnorr signature used by Kaspa P2PK. */
-    fun bip340Sign(msg32:ByteArray,privateKey:ByteArray):ByteArray{
-        require(msg32.size==32&&privateKey.size==32)
+    fun bip340Sign(msg32:ByteArray,privateKey:ByteArray,aux:ByteArray=ByteArray(32).also{SecureRandom().nextBytes(it)}):ByteArray{
+        require(msg32.size==32&&privateKey.size==32&&aux.size==32)
         val d0=BigInteger(1,privateKey);require(d0>BigInteger.ZERO&&d0<n)
         val p=g.multiply(d0).normalize();val d=if(p.affineYCoord.toBigInteger().testBit(0))n.subtract(d0) else d0
         val px=bytes32(p.affineXCoord.toBigInteger())
-        val aux=ByteArray(32).also{SecureRandom().nextBytes(it)}
         val t=xor(bytes32(d),tagged("BIP0340/aux",aux))
         val k0=BigInteger(1,tagged("BIP0340/nonce",t+px+msg32)).mod(n);require(k0!=BigInteger.ZERO)
         val rPoint=g.multiply(k0).normalize();val k=if(rPoint.affineYCoord.toBigInteger().testBit(0))n.subtract(k0) else k0
@@ -77,9 +76,30 @@ internal object KaspaTx {
         return rx+bytes32(k.add(e.multiply(d)).mod(n))
     }
 
+    /** BIP-340 verification over public data, also run before releasing any signature. */
+    internal fun bip340Verify(msg:ByteArray,pub:ByteArray,sig:ByteArray):Boolean=runCatching {
+        require(msg.size==32&&pub.size==32&&sig.size==64)
+        val p=curve.curve.decodePoint(byteArrayOf(2)+pub).normalize()
+        val r=BigInteger(1,sig.copyOfRange(0,32));val scalar=BigInteger(1,sig.copyOfRange(32,64))
+        require(r<curve.curve.field.characteristic&&scalar<n)
+        val e=BigInteger(1,tagged("BIP0340/challenge",sig.copyOfRange(0,32)+pub+msg)).mod(n)
+        val point=g.multiply(scalar).subtract(p.multiply(e)).normalize()
+        !point.isInfinity&&!point.affineYCoord.toBigInteger().testBit(0)&&point.affineXCoord.toBigInteger()==r
+    }.getOrDefault(false)
+
     fun signAll(tx:Tx,privateKey:ByteArray){
+        require(tx.version==0&&tx.inputs.isNotEmpty()&&tx.outputs.isNotEmpty()){"지원하지 않는 거래 형식입니다"}
+        val pub=KaspaAddress.xOnlyPublicKey(privateKey)
+        val owner=p2pkScript(pub)
+        tx.inputs.forEach{ require(it.sigOpCount==1&&it.utxo.amount>0&&it.utxo.scriptVersion==0&&it.utxo.script.contentEquals(owner)){"현재 지갑의 UTXO가 아닙니다"} }
+        tx.outputs.forEach{require(it.amount>0){"출력 금액 오류"}}
+        val totalIn=tx.inputs.fold(0L){sum,i->Math.addExact(sum,i.utxo.amount)}
+        val totalOut=tx.outputs.fold(0L){sum,o->Math.addExact(sum,o.amount)}
+        require(totalIn>totalOut){"거래 금액 또는 수수료 오류"}
         tx.inputs.forEachIndexed{idx,input->
-            val sig=bip340Sign(schnorrSigHash(tx,idx),privateKey)
+            val hash=schnorrSigHash(tx,idx)
+            val sig=bip340Sign(hash,privateKey)
+            check(bip340Verify(hash,pub,sig)){"서명 검증 실패"}
             input.signatureScript=byteArrayOf(65)+sig+byteArrayOf(1)
         }
     }

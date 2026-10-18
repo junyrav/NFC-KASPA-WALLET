@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Mainnet market quote for indicative conversion only, never a valuation of TN10 coins. */
+/** Mainnet market quote for indicative KRW/USD conversion. */
 internal data class MarketQuote(val krw:Double,val usd:Double,val change:Double) {
     companion object {
         suspend fun fetch():MarketQuote=withContext(Dispatchers.IO) {

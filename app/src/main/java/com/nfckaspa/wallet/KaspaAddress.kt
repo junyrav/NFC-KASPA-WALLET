@@ -25,28 +25,33 @@ object KaspaAddress {
         return if (raw.size == 32) raw else ByteArray(32).also { raw.copyInto(it, 32 - raw.size) }
     }
 
-    fun testnet(privateKey: ByteArray): String {
-        val x = xOnlyPublicKey(privateKey)
+    fun mainnet(privateKey: ByteArray): String {
+        return fromPublicKey(xOnlyPublicKey(privateKey))
+    }
+
+    internal fun fromPublicKey(x:ByteArray):String {
+        require(x.size==32)
         val payload = ByteArray(33)
         payload[0] = 0
         x.copyInto(payload, 1)
         val data = convert8to5(payload)
-        val prefix = prefixExpand("kaspatest")
+        val prefix = prefixExpand("kaspa")
         val values = IntArray(prefix.size + data.size + 8)
         prefix.copyInto(values)
         data.copyInto(values, prefix.size)
         val mod = polymod(values)
         val checksum = IntArray(8) { i -> ((mod shr (5 * (7 - i))) and 31).toInt() }
-        return "kaspatest:" + (data + checksum).joinToString("") { alphabet[it].toString() }
+        return "kaspa:" + (data + checksum).joinToString("") { alphabet[it].toString() }
     }
 
-    /** Returns the 32-byte x-only public key payload from a kaspatest P2PK address. */
-    fun testnetPayload(address: String): ByteArray {
-        require(address.startsWith("kaspatest:")) { "TN10 address required" }
+    /** Returns the 32-byte x-only public key payload from a kaspa P2PK address. */
+    fun mainnetPayload(address: String): ByteArray {
+        require(address.startsWith("kaspa:")) { "메인넷 kaspa: 주소만 사용할 수 있습니다" }
+        require(address==address.lowercase(java.util.Locale.ROOT)) { "주소는 소문자로 입력하세요" }
         val text = address.substringAfter(':').lowercase()
         require(text.length > 8) { "Invalid address" }
         val values = IntArray(text.length) { i -> alphabet.indexOf(text[i]).also { require(it >= 0) { "Invalid address character" } } }
-        val expanded = prefixExpand("kaspatest")
+        val expanded = prefixExpand("kaspa")
         require(polymod(expanded + values) == 0L) { "Address checksum mismatch" }
         val payload = convert5to8(values.copyOfRange(0, values.size - 8))
         require(payload.size == 33 && payload[0].toInt() == 0) { "Only PubKey addresses are supported" }
