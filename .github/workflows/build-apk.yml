@@ -23,6 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      # assembleDebug otherwise creates a new ~/.android/debug.keystore on a fresh
+      # GitHub runner. Keeping that keystore stable lets later APKs install as
+      # true in-place updates, so Android app data and AndroidKeyStore entries
+      # are not destroyed between test builds.
+      - name: Restore stable debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nfc-kaspa-wallet-debug-keystore-v1
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
