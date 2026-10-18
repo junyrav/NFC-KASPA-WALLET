@@ -53,9 +53,71 @@ internal fun WalletHeader(balance: String, address: String) {
         Spacer(Modifier.height(20.dp))
         Text("총 자산", color = KaspaTealDark)
         Text(balance, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = KaspaInk)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
+        Text("KRW 환산은 다음 단계에서 실시간 시세와 연결", fontSize = 12.sp, color = KaspaTealDark)
+        Spacer(Modifier.height(14.dp))
         Text(shortKaspaAddress(address), color = KaspaTealDark)
     }
+}
+
+@Composable
+internal fun WalletActions(
+    onSend: () -> Unit,
+    onReceive: () -> Unit,
+    onCopy: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onSend, modifier = Modifier.weight(1f)) { Text("Send") }
+        Button(onClick = onReceive, modifier = Modifier.weight(1f)) { Text("Receive") }
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) { Text("주소 복사") }
+        OutlinedButton(onClick = onRefresh, modifier = Modifier.weight(1f)) { Text("새로고침") }
+    }
+}
+
+@Composable
+internal fun WalletSecurityStatus(cardA: Boolean, cardB: Boolean, cardC: Boolean) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Wallet Security", fontWeight = FontWeight.Bold, color = KaspaInk)
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                SecurityChip("CARD A", cardA)
+                SecurityChip("CARD B", cardB)
+                SecurityChip("CARD C", cardC)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("NFC 카드 + Galaxy 생체인증", fontSize = 13.sp, color = KaspaTealDark)
+        }
+    }
+}
+
+@Composable
+private fun SecurityChip(label: String, active: Boolean) {
+    Surface(
+        color = if (active) KaspaMint else Color(0xFFF0F2F2),
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            if (active) "$label ✓" else label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            color = if (active) KaspaTealDark else Color.Gray,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+internal fun VersionFooter() {
+    Text(
+        "v${BuildConfig.VERSION_NAME} · TN10 TESTNET ONLY",
+        style = MaterialTheme.typography.bodySmall,
+        color = KaspaTealDark
+    )
 }
 
 internal fun shortKaspaAddress(address: String): String {
