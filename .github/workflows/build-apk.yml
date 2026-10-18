@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Export APK tools') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -64,16 +65,19 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: warn
 
+  verification-tool:
+    if: ${{ startsWith(github.event.head_commit.message, 'Export APK tools') }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Export APK verification tool
         run: |
-          apk_signer_jar=$(rg --files "$ANDROID_HOME/build-tools" | rg '/lib/apksigner\.jar$' | sort -V | tail -n 1)
+          apk_signer_jar=$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' -type f | sort -V | tail -n 1)
           test -f "$apk_signer_jar"
-          mkdir -p app/build/verification-tools
-          cp "$apk_signer_jar" app/build/verification-tools/apksigner.jar
-
+          mkdir -p verification-tools
+          cp "$apk_signer_jar" verification-tools/apksigner.jar
       - name: Upload APK verification tool
         uses: actions/upload-artifact@v4
         with:
           name: apk-verification-tool
-          path: app/build/verification-tools/apksigner.jar
+          path: verification-tools/apksigner.jar
           if-no-files-found: error
