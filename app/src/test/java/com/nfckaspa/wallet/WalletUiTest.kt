@@ -56,4 +56,17 @@ class WalletUiTest {
         }
     }
 
+    @Test fun screenshotOptInResetsWhenAppLeavesForeground() {
+        val c=RuntimeEnvironment.getApplication()
+        WalletStore.saveAddress(c,KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1}))
+        ActivityScenario.launch(MainActivity::class.java).use{scenario->
+            compose.onNodeWithText("설정",useUnmergedTree=true).performClick()
+            compose.onNodeWithText("문제 확인용 화면 캡처").performScrollTo().performClick()
+            scenario.onActivity{org.junit.Assert.assertEquals(0,it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE)}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            compose.waitForIdle()
+            scenario.onActivity{org.junit.Assert.assertTrue(it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE!=0)}
+        }
+    }
 }

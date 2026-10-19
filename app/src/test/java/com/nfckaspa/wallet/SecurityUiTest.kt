@@ -45,4 +45,14 @@ class SecurityUiTest {
         compose.runOnIdle{state=state.copy(to=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=2}))}
         compose.onNodeWithText("다음").assertIsEnabled()
     }
+    @Test fun interruptedInitialRegistrationOffersOneCardContinuation() {
+        var calls=0
+        compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(address=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1}),tab="Cards",cards=setOf("A"),password="Kasp8!xy",resumeAvailable=true),DesignActions(resumeRegistration={calls++}))}}
+        compose.onNodeWithText("등록한 카드로 이어서 등록").performScrollTo().assertIsEnabled().performClick()
+        assertEquals(1,calls)
+    }
+    @Test fun eightCharacterPasswordWithMatchingConfirmationEnablesCreation() {
+        compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(password="Kasp8!xy",passwordConfirm="Kasp8!xy"),DesignActions())}}
+        compose.onNodeWithText("새 메인넷 지갑 생성").assertIsEnabled()
+    }
 }

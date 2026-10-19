@@ -17,6 +17,18 @@ internal object Shares{
             }
         } }
     }
+    /** Recover the original degree-one polynomial from its constant (authenticated key) and one point. */
+    fun restoreWithKey(secret:ByteArray,share:ByteArray):Map<Slot,ByteArray>{
+        require(secret.size==32&&share.size==33)
+        val x=share[0].toInt() and 255;require(x in 1..3)
+        return Slot.entries.associateWith{slot->ByteArray(33).also{out->
+            out[0]=slot.n.toByte()
+            for(i in secret.indices){val constant=secret[i].toInt() and 255
+                val slope=div((share[i+1].toInt() and 255) xor constant,x)
+                out[i+1]=(constant xor mul(slope,slot.n)).toByte()
+            }
+        }}
+    }
     fun join(a:ByteArray,b:ByteArray):ByteArray{
         restore(a,b) // Validate before accessing the share coordinates.
         val x1=a[0].toInt() and 255;val x2=b[0].toInt() and 255

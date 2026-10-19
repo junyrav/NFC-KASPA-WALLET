@@ -35,7 +35,7 @@ Prior to the independent recovery test the journal deliberately retains a previo
 - Version, slot, public identity, sequence and V3 generation are AEAD-bound. Recovery checks the reconstructed private key against the expected wallet identity.
 - Partial journal writes invalidate the destination header first and commit its header last. A previous active bank remains intact until explicit verified cleanup.
 - Full recipient, amount, fee and change are checked before signing. Inputs must belong to the wallet; duplicate outpoints, overflow, excessive mass and fee estimates fail closed. Every BIP-340 signature is locally verified before submission.
-- Secrets are kept in memory only, with array clearing on lock/background/disposal/timeout; passwords are never persisted. FLAG_SECURE and backup/device-transfer exclusions remain enabled. JVM strings, BigInteger and provider/GC copies prevent a promise of physical memory erasure.
+- Secrets are kept in memory only, with array clearing on lock/background/disposal/timeout; passwords are never persisted. FLAG_SECURE is the default; the 0.10.1 temporary troubleshooting exception below is owner-controlled. Backup/device-transfer exclusions remain enabled. JVM strings, BigInteger and provider/GC copies prevent a promise of physical memory erasure.
 
 ## Residual risks and verification limits
 
@@ -56,3 +56,11 @@ Prior to the independent recovery test the journal deliberately retains a previo
 `WalletStore.kt`, `KaspaBroadcast.kt`: redundant durable pending state, reconciliation, exact retry and explicit abandonment.
 
 `.github/workflows/build-apk.yml`, `gradle/wrapper/*`, `gradle/verification-metadata.xml`: build integrity. New regression suites: `AuditRemediationTest` and `PendingRecoveryTest`. Re-run `bash ./gradlew --dependency-verification strict :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleMainnet` and independently inspect the delivery APK certificate/manifest.
+
+
+## 0.10.1 interrupted initial registration / owner-requested usability changes
+
+- Root cause: cancellation/backgrounding/timeout cleared the volatile initial key after just A was written, while the only unlock path required two cards. Initial unfinished V3 generations now have a separate continuation path: the latest current-generation card, its recovery password, and the same phone's per-operation biometric Keystore decryption. Both the full daily key and password-opened share must authenticate before recreating the original degree-one sharing polynomial. Remaining cards keep the same wallet, generation and polynomial; no key/password/share is persisted. This path is unavailable with three registered cards or verified backups and never enables spending before the normal backup gate. A completed write whose metadata update was interrupted can restore its public registration progress after authentication.
+- One card alone cannot recover after uninstall/app-data deletion, phone replacement or Keystore invalidation. Two independent shares remain required then. Keep the app/data, card and its password until the remaining cards are registered. Zero committed cards plus a lost volatile key cannot be restored by this feature.
+- At the owner's explicit request, new passwords may be eight characters or longer, with trivial repeated/common patterns rejected. Long random generation and Argon2id parameters remain unchanged. This weakens resistance to offline guessing compared with the earlier 16-character policy; eight characters do not imply adequate entropy, and no online attempt counter can protect copied ciphertext.
+- At the owner's explicit request, Settings offers temporary screen-capture permission for troubleshooting. It defaults to blocked, is not persisted, and resets on backgrounding. Generated plaintext-password dialogs always use SecureOn and force the activity secure as well. Permitted captures can expose wallet addresses, balances and history; do not share them indiscriminately. This is distinct from Android debuggable builds, which remain prohibited from mainnet key creation/NFC/broadcast.

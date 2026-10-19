@@ -52,8 +52,8 @@ class CardSecurityTest {
         pass.fill('\u0000')
     }
     @Test fun passwordPolicyRejectsWeakAndAcceptsStrongPasswords() {
-        for(p in listOf("12345678","Password123456789!","aaaaaaaaAAAAAAAA1111","Correct-Backup!20".take(15)))assertFalse(p,PasswordPolicy.valid(p))
-        assertTrue(PasswordPolicy.valid("Correct-Backup!2026"))
+        for(p in listOf("12345678","Password123456789!","aaaaaaaaAAAAAAAA1111","Abc!123"))assertFalse(p,PasswordPolicy.valid(p))
+        assertTrue(PasswordPolicy.valid("Correct-Backup!2026"));assertTrue(PasswordPolicy.valid("Kasp8!xy"));assertTrue(PasswordPolicy.valid("83629517"))
     }
     @Test fun mixingLegacyWalletsOrOmittingExpectedIdentityCannotPassRecovery() {
         val key=ByteArray(32).apply{this[31]=1};val other=ByteArray(32).apply{this[31]=2}

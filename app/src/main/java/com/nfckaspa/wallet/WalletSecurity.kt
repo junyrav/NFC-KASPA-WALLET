@@ -17,11 +17,10 @@ import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
 
 internal object PasswordPolicy {
-    fun valid(p:String):Boolean = p.length>=16 && p.toSet().size>=8 &&
-        listOf(p.any{it.isLowerCase()},p.any{it.isUpperCase()},p.any{it.isDigit()},p.any{!it.isLetterOrDigit()}).count{it}>=3 &&
+    fun valid(p:String):Boolean = p.length>=8 && p.toSet().size>=4 &&
         listOf("password","qwerty","123456","비밀번호").none{p.lowercase().contains(it)}
     fun generate():String {while(true){val candidate=android.util.Base64.encodeToString(Crypto.random(18),android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE);if(valid(candidate))return candidate}}
-    fun requireValid(p:String) { require(valid(p)){"새 복구 비밀번호는 16자 이상, 영문 대·소문자·숫자·기호 중 3종류를 사용하세요"} }
+    fun requireValid(p:String) { require(valid(p)){"새 복구 비밀번호는 8자 이상이며 반복·흔한 비밀번호는 피하세요"} }
 }
 
 internal object Crypto {

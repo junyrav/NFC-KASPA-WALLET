@@ -59,13 +59,13 @@ internal data class WalletVisualState(
     val history:List<WalletStore.Transfer> = emptyList(),
     val historyLoading:Boolean=false,val historyError:String="",val historyMore:Boolean=false,val status:String="",val sendInfo:String="",
     val busy:Boolean=false,val refreshing:Boolean=false,val awaiting:Boolean=false,val recovery:Boolean=false,
-    val target:String?=null,val unlocked:Boolean=false,val password:String="",val currency:String="KRW",
+    val target:String?=null,val unlocked:Boolean=false,val captureAllowed:Boolean=false,val password:String="",val currency:String="KRW",
     val passwordConfirm:String="",val newPassword:String="",val newPasswordConfirm:String="",val passwordFrozen:Boolean=false,
-    val recoveryAddress:String="",val backupVerified:Boolean=false,val recoveryVerified:Boolean=false,val cleaning:Boolean=false,val cleanedCards:Set<String> = emptySet(),val addressValid:Boolean=false,val relayFloor:Boolean=false,val pending:Boolean=false,val confirmationOpen:Boolean=false,
+    val recoveryAddress:String="",val backupVerified:Boolean=false,val recoveryVerified:Boolean=false,val cleaning:Boolean=false,val resumeAvailable:Boolean=false,val resumingRegistration:Boolean=false,val cleanedCards:Set<String> = emptySet(),val addressValid:Boolean=false,val relayFloor:Boolean=false,val pending:Boolean=false,val confirmationOpen:Boolean=false,
     val krw:Double?=null,val usd:Double?=null,val change:Double?=null
 )
 internal data class DesignActions(
-    val resetPending:()->Unit={},val cleanup:()->Unit={},val restartProvision:()->Unit={},val generatePassword:()->Unit={},val retryPending:()->Unit={},val unlock:()->Unit={},val passwordConfirm:(String)->Unit={},val newPassword:(String)->Unit={},val newPasswordConfirm:(String)->Unit={},val recoveryAddress:(String)->Unit={},
+    val resumeRegistration:()->Unit={},val resetPending:()->Unit={},val cleanup:()->Unit={},val restartProvision:()->Unit={},val generatePassword:()->Unit={},val retryPending:()->Unit={},val unlock:()->Unit={},val passwordConfirm:(String)->Unit={},val newPassword:(String)->Unit={},val newPasswordConfirm:(String)->Unit={},val recoveryAddress:(String)->Unit={},
     val historyRefresh:()->Unit={},val historyNext:()->Unit={},
     val navigate:(String)->Unit={},val route:(String)->Unit={},val copy:(String)->Unit={},
     val refresh:()->Unit={},val scan:()->Unit={},val changeTo:(String)->Unit={},val changeAmount:(String)->Unit={},
@@ -148,13 +148,13 @@ private fun total(s:WalletVisualState):String = runCatching {
 
 @Composable internal fun WalletDesign(s:WalletVisualState,a:DesignActions) {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
-    if(!s.confirmationOpen&&(s.awaiting||s.recovery||s.target!=null||s.cleaning))AlertDialog(
+    if(!s.confirmationOpen&&(s.awaiting||s.recovery||s.target!=null||s.cleaning||s.resumingRegistration))AlertDialog(
         onDismissRequest={if(!s.busy)a.cancel()},
-        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else if(s.cleaning)"이전 카드 데이터 정리" else "NFC 카드 인증")},
+        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else if(s.resumingRegistration)"중단된 카드 등록 이어가기" else if(s.cleaning)"이전 카드 데이터 정리" else "NFC 카드 인증")},
         text={Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Icon(Icons.Outlined.Nfc,null,Modifier.size(52.dp),tint=Teal)
             Text(s.status,fontSize=14.sp)
-            if(s.recovery||s.cleaning)OutlinedTextField(s.password,a.password,label={Text("태그할 카드의 복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,singleLine=true)
+            if(s.recovery||s.cleaning||s.resumingRegistration)OutlinedTextField(s.password,a.password,label={Text("태그할 카드의 복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,singleLine=true)
             if(s.busy){LinearProgressIndicator(Modifier.fillMaxWidth(),color=Teal);Text("카드를 움직이지 마세요 · 최대 5회 자동 재시도",fontSize=12.sp,color=Muted)}
             else Text("휴대폰의 NFC 위치에 카드를 가까이 대세요.",fontSize=12.sp,color=Muted)
         }},
@@ -186,9 +186,9 @@ private fun total(s:WalletVisualState):String = runCatching {
                 Spacer(Modifier.height(10.dp))
                 WhiteCard {Text("지갑 시작하기",fontSize=22.sp,fontWeight=FontWeight.Bold);Text("새 지갑을 만들거나 NFC 카드 2장으로 기존 지갑을 복구하세요.",color=Muted)
                     Hint("Kaspa 메인넷 지갑", "실제 KAS를 사용하는 지갑입니다. 복구 비밀번호와 NFC 카드를 안전하게 보관하세요.")
-                    OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호 · 새 지갑은 16자 이상")},visualTransformation=PasswordVisualTransformation(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
+                    OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호 · 새 지갑은 8자 이상")},visualTransformation=PasswordVisualTransformation(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
                     OutlinedTextField(s.passwordConfirm,a.passwordConfirm,label={Text("새 지갑 비밀번호 재입력")},visualTransformation=PasswordVisualTransformation(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth())
-                    Text("새 비밀번호: 16자 이상, 대·소문자·숫자·기호 중 3종류",fontSize=12.sp,color=Muted)
+                    Text("8자 이상 · 긴 무작위 비밀번호 권장 · 짧으면 카드 복사본의 추측 공격에 취약합니다",fontSize=12.sp,color=Muted)
                     TextButton(onClick=a.generatePassword,enabled=!s.busy&&!s.recovery){Text("강한 비밀번호 생성")}
                     Primary("새 메인넷 지갑 생성",a.create,PasswordPolicy.valid(s.password)&&s.password==s.passwordConfirm&&!s.busy&&!s.recovery)
                     OutlinedTextField(s.recoveryAddress,a.recoveryAddress,label={Text("기존 지갑 주소 · 구버전 카드 복구 시 필수")},enabled=!s.busy&&!s.recovery,modifier=Modifier.fillMaxWidth())
@@ -207,9 +207,9 @@ private fun total(s:WalletVisualState):String = runCatching {
                 "Transactions"->TransactionsDesign(s,a)
             }
             if(s.busy||s.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Teal,trackColor=Mint)
-            if(s.status.startsWith("처리 실패")||s.status.startsWith("잔액 조회 실패")||s.awaiting||s.recovery||s.target!=null||s.cleaning||s.tab=="Cards"||s.tab=="Transactions") {
+            if(s.status.startsWith("처리 실패")||s.status.startsWith("잔액 조회 실패")||s.awaiting||s.recovery||s.target!=null||s.cleaning||s.resumingRegistration||s.tab=="Cards"||s.tab=="Transactions") {
                 Hint(s.status,if(s.busy)"카드를 움직이지 마세요 · 최대 5회 자동 재시도" else "")
-                if((s.awaiting||s.recovery||s.target!=null||s.cleaning)&&!s.busy) TextButton(onClick=a.cancel,modifier=Modifier.align(Alignment.CenterHorizontally)){Text("대기 취소")}
+                if((s.awaiting||s.recovery||s.target!=null||s.cleaning||s.resumingRegistration)&&!s.busy) TextButton(onClick=a.cancel,modifier=Modifier.align(Alignment.CenterHorizontally)){Text("대기 취소")}
             }
         }
     }
@@ -361,13 +361,15 @@ private fun total(s:WalletVisualState):String = runCatching {
     SettingsGroup("보안 설정") {
         SettingsRow(Icons.Outlined.Fingerprint,"생체인증","송금 시 필수"){a.setting("biometric")}
         SettingsRow(Icons.Outlined.Lock,"개인키 잠금","NFC + 생체인증"){a.setting("lock")}
+        SettingsRow(Icons.Outlined.Screenshot,"문제 확인용 화면 캡처",if(s.captureAllowed)"허용 중" else "차단"){a.setting("capture")}
+        Text("허용하면 주소·잔액·거래내역을 캡처하거나 화면 공유할 수 있습니다. 앱을 벗어나면 다시 차단하며, 생성 비밀번호 표시 화면은 항상 보호합니다.",Modifier.padding(12.dp),fontSize=11.sp,color=Muted)
     }
     SettingsGroup("NFC 카드 관리") {
         if(s.unlocked) {
             Text("새 카드용 비밀번호는 3장 등록을 마칠 때까지 유지됩니다.",fontSize=12.sp,color=Muted)
             if(!s.passwordFrozen) {
             TextButton(onClick=a.generatePassword,enabled=!s.busy){Text("강한 비밀번호 생성")}
-            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 16자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(s.newPasswordConfirm,a.newPasswordConfirm,label={Text("새 카드용 비밀번호 재입력")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             } else Text("현재 등록에 설정한 비밀번호를 사용 중입니다.",fontSize=12.sp,color=Muted)
             TextButton(onClick={a.setting("locknow")}){Text("지금 잠그기")}
@@ -397,6 +399,10 @@ private fun total(s:WalletVisualState):String = runCatching {
         if(!s.unlocked) {
             Text("카드마다 해당 비밀번호를 입력하고 태그하세요. 이전 세대 카드도 복구는 가능하지만 현재 세대 검증과 정리는 별도로 필요합니다.",fontSize=13.sp,color=Muted)
             OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
+            if(s.resumeAvailable) {
+                Text("처음 등록이 중단되었다면 같은 휴대폰에서 등록한 카드 1장·등록 비밀번호·지문 인증으로 이어갈 수 있습니다. 앱 삭제나 다른 휴대폰에서의 1장 복구는 지원하지 않습니다.",fontSize=12.sp,color=Muted)
+                Primary("등록한 카드로 이어서 등록",a.resumeRegistration,s.password.length>=8&&!s.busy&&!s.recovery&&!s.resumingRegistration)
+            }
             Primary(if(s.backupVerified)"카드 2장으로 복구 재검증" else "카드 2장으로 복구 검증",a.recover,s.password.length>=8&&!s.busy&&!s.recovery)
             OutlinedButton(onClick=a.unlock,enabled=s.password.length>=8&&!s.busy&&!s.recovery){Text("카드 등록·교체를 위해 잠금 해제")}
         }
@@ -404,7 +410,7 @@ private fun total(s:WalletVisualState):String = runCatching {
             Text("새 카드용 비밀번호는 3장 등록을 마칠 때까지 유지됩니다.",fontSize=12.sp,color=Muted)
             if(!s.passwordFrozen) {
             TextButton(onClick=a.generatePassword,enabled=!s.busy){Text("강한 비밀번호 생성")}
-            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 16자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(s.newPasswordConfirm,a.newPasswordConfirm,label={Text("새 카드용 비밀번호 재입력")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             } else Text("현재 등록에 설정한 비밀번호를 사용 중입니다.",fontSize=12.sp,color=Muted)
             TextButton(onClick={a.setting("locknow")}){Text("지금 잠그기")}

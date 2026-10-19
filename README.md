@@ -1,4 +1,4 @@
-# Kaspa NFC Wallet · v0.10.0 Mainnet
+# Kaspa NFC Wallet · v0.10.1 Mainnet
 
 Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name are **Kaspa NFC Wallet**.
 
@@ -43,3 +43,5 @@ Automated validation does not broadcast a funded mainnet transaction or substitu
 Delivered mainnet APKs are signed after CI using the retained private delivery key, which is not committed. Raw mainnet Actions artifacts are unsigned. Future delivered mainnet APKs retain the same package and private certificate for in-place updates.
 
 Debug builds use a separate package, disable real mainnet creation/NFC/broadcast and are not distributed by CI. See SECURITY.md for important Classic-card, previous-ciphertext, JVM-signing and single-API limitations.
+
+Initial interrupted registration can continue on the original phone using one committed current-generation card, its password and biometric Keystore authorization. This does not replace two-card recovery after reinstall or on another phone. Settings can temporarily allow screenshots; generated plaintext passwords remain protected. New password minimum is 8 characters at the owner's request; longer random passwords remain recommended.
