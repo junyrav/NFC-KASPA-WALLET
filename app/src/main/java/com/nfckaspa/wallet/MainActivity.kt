@@ -425,7 +425,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 val two=found.values.take(2);val recovered=Shares.join(two[0],two[1])
                                 try {
                                     RecoveryIdentity.validate(recovered,expected,recoveryPub)
-                                    saveWallet(recovered);shares=Shares.restore(two[0],two[1])
+                                    saveWallet(recovered);shares.values.forEach{it.fill(0)};shares=Shares.restore(two[0],two[1])
                                     if(cardMarks.size==3&&foundSecure.size==2){WalletStore.verifyBackup(context);recoveryVerified=true;backupVerified=WalletStore.backupVerified(context)}
                                     found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null
                                     if(!keepRecoveryKey&&recoveryVerified){lockSecrets();status="현재 세대 복구 검증 완료 ✓ · 새 비밀번호를 입력하고 카드 3장의 이전 영역을 정리하세요"}
@@ -488,7 +488,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             "node" to ("노드" to "https://api.kaspa.org · 기본 공식 REST API"),
             "version" to ("앱 정보" to "Kaspa NFC Wallet\nv${BuildConfig.VERSION_NAME}\nYour Keys on NFC · Secure · Simple · Yours"),
             "licenses" to ("오픈소스 라이선스" to "AndroidX / Jetpack Compose · Apache 2.0\nZXing / ZXing Android Embedded · Apache 2.0\nBouncy Castle · MIT\nRobolectric (검증 도구) · MIT"),
-            "backup" to ("백업 검증 필요" to "보안 카드 3장 등록과 카드 2장 복구 검증을 완료하세요.")
+            "backup" to ("백업 검증 필요" to "카드 3장 등록·2장 복구 검증·3장 이전 영역 정리를 완료하세요.")
         )
         val message=messages[settingDialog]
         AlertDialog(onDismissRequest={settingDialog=""},title={Text(if(settingDialog=="currency")"표시 통화" else message?.first?:"안내")},

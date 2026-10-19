@@ -150,7 +150,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
     if(!s.confirmationOpen&&(s.awaiting||s.recovery||s.target!=null||s.cleaning))AlertDialog(
         onDismissRequest={if(!s.busy)a.cancel()},
-        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else "NFC 카드 인증")},
+        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else if(s.cleaning)"이전 카드 데이터 정리" else "NFC 카드 인증")},
         text={Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Icon(Icons.Outlined.Nfc,null,Modifier.size(52.dp),tint=Teal)
             Text(s.status,fontSize=14.sp)
@@ -207,7 +207,7 @@ private fun total(s:WalletVisualState):String = runCatching {
                 "Transactions"->TransactionsDesign(s,a)
             }
             if(s.busy||s.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Teal,trackColor=Mint)
-            if(s.status.startsWith("처리 실패")||s.status.startsWith("잔액 조회 실패")||s.awaiting||s.recovery||s.target!=null||s.cleaning) {
+            if(s.status.startsWith("처리 실패")||s.status.startsWith("잔액 조회 실패")||s.awaiting||s.recovery||s.target!=null||s.cleaning||s.tab=="Cards"||s.tab=="Transactions") {
                 Hint(s.status,if(s.busy)"카드를 움직이지 마세요 · 최대 5회 자동 재시도" else "")
                 if((s.awaiting||s.recovery||s.target!=null||s.cleaning)&&!s.busy) TextButton(onClick=a.cancel,modifier=Modifier.align(Alignment.CenterHorizontally)){Text("대기 취소")}
             }
@@ -421,6 +421,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         if(s.recoveryVerified&&!s.backupVerified){
             Text("새 세대 복구 검증 완료 · 이전 데이터 정리 ${s.cleanedCards.size}/3",color=Teal)
             Text("새 복구 비밀번호를 입력한 후 A/B/C를 태그하세요. 현재 영역은 보존하고 이전 영역만 지웁니다.",fontSize=12.sp,color=Muted)
+            if(s.unlocked)OutlinedTextField(s.password,a.password,label={Text("정리할 카드의 새 복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),singleLine=true,enabled=!s.busy,modifier=Modifier.fillMaxWidth())
             Primary("이전 데이터 정리",a.cleanup,s.password.isNotBlank()&&!s.busy&&!s.recovery&&!s.cleaning)
         }
         Text("등록 이력은 이 기기에서 확인한 기준입니다.",fontSize=11.sp,color=Muted)

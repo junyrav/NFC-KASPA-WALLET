@@ -35,4 +35,14 @@ class SecurityUiTest {
         compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(address=to,to=to,amount="1",fee=2000,page="Confirm"),DesignActions())}}
         compose.onNodeWithText(to).assertIsDisplayed()
     }
+    @Test fun unspendableRecipientDisablesNextAndMaximumUntilReplaced() {
+        val invalid=KaspaAddress.fromPublicKey(ByteArray(32))
+        var state by mutableStateOf(WalletVisualState(address=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1}),to=invalid,amount="1",page="Send"))
+        compose.setContent{KaspaWalletTheme{WalletDesign(state,DesignActions())}}
+        compose.onNodeWithText("다음").assertIsNotEnabled()
+        compose.onNodeWithText("전액 입력").assertIsNotEnabled()
+        compose.onNodeWithText("주소 형식·체크섬·공개키를 확인하세요").assertExists()
+        compose.runOnIdle{state=state.copy(to=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=2}))}
+        compose.onNodeWithText("다음").assertIsEnabled()
+    }
 }

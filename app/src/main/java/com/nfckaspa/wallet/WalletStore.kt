@@ -53,7 +53,7 @@ internal object WalletStore {
     fun pending(c:Context):Pending? {
         val raw=prefs(c).getString("pending_transaction",null)
         val mirror=runCatching{pendingFile(c).readFully().toString(Charsets.UTF_8)}.getOrNull()
-        if(raw==null&&mirror==null)return null
+        if(raw==null&&mirror==null&&!pendingFile(c).baseFile.exists()&&!java.io.File(c.filesDir,"pending-payment-v3.json.bak").exists())return null
         val first=raw?.let{runCatching{decodePending(it)}.getOrNull()}
         val second=mirror?.let{runCatching{decodePending(it)}.getOrNull()}
         if(first!=null&&second!=null&&first!=second)return Pending(loadAddress(c),"damaged-record","","","",0,0)
