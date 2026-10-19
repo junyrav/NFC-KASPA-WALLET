@@ -475,7 +475,11 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                             }
                         } finally {sh.fill(0)}
                     }
-                } catch(e:Exception){status="처리 실패 · ${e.message?:"카드와 비밀번호를 확인하세요"}"}
+                } catch(e:Exception){
+                    val invalidPair=recoveryMode&&found.size>=2
+                    if(invalidPair)lockSecrets() // Do not retain a failed pair that would prevent replacing either card.
+                    status="처리 실패 · ${e.message?:"카드와 비밀번호를 확인하세요"}"+(if(invalidPair)" · 두 카드 확인을 초기화했습니다. 비밀번호를 입력하고 복구 검증을 다시 시작하세요" else "")
+                }
                 finally{if(releaseBusy)busy=false}
             }
         }
