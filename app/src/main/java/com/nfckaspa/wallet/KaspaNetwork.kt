@@ -22,7 +22,7 @@ internal object KaspaNetwork {
             c.setRequestProperty("User-Agent","Kaspa-NFC-Wallet/${BuildConfig.VERSION_NAME}")
             if(body!=null){c.doOutput=true;c.setRequestProperty("Content-Type","application/json");c.outputStream.use{it.write(body.toByteArray(Charsets.UTF_8))}}
             val code=c.responseCode
-            val text=(if(code in 200..299)c.inputStream else c.errorStream)?.use{input->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);var count:Int;while(input.read(buffer).also{count=it}!=-1){check(out.size()+count<=MAX_BODY){"네트워크 응답 한도 초과"};out.write(buffer,0,count)};out.toString("UTF-8")}.orEmpty()
+            val text=(if(code in 200..299)c.inputStream else c.errorStream)?.use{input->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);while(true){val count=input.read(buffer);if(count<0)break;check(out.size()+count<=MAX_BODY){"네트워크 응답 한도 초과"};out.write(buffer,0,count)};out.toString("UTF-8")}.orEmpty()
             if(code !in 200..299)throw HttpFailure(code)
             return text
         } finally { c.disconnect() }

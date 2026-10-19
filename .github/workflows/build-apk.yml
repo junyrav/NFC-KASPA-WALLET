@@ -38,7 +38,7 @@ jobs:
           test "$(git -C third_party/secp256k1 rev-parse HEAD)" = "6e2c8bc4ecdc6e71dbe7a368f360d8d453ce435d"
           cmake -S app/src/main/cpp -B native-test -DCMAKE_BUILD_TYPE=Release
           cmake --build native-test --parallel 2
-          sdkmanager "ndk;28.2.13676358" "cmake;3.22.1"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "cmake;3.22.1"
 
       - name: Build and verify wallet
         run: bash ./gradlew --write-verification-metadata sha256 -PliveNodeChecks=true :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleDebug :app:assembleMainnet :app:signingReport --stacktrace

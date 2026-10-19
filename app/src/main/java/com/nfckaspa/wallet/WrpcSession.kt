@@ -36,6 +36,6 @@ internal class WrpcSession(url:String,client:OkHttpClient=CLIENT):java.io.Closea
     override fun close(){ws.cancel()}
     companion object {
         private val CLIENT=OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(5,TimeUnit.SECONDS)
-            .dns{host->Dns.SYSTEM.lookup(host).also{addresses->require(addresses.isNotEmpty()&&addresses.none{it.isAnyLocalAddress||it.isLoopbackAddress||it.isLinkLocalAddress||it.isSiteLocalAddress||it.isMulticastAddress||(it.address.size==16&&(it.address[0].toInt() and 0xfe)==0xfc)}){"공개 노드 주소가 아닙니다"}}.build()
+            .dns(object:Dns { override fun lookup(hostname:String):List<java.net.InetAddress> = Dns.SYSTEM.lookup(hostname).also{addresses->require(addresses.isNotEmpty()&&addresses.none{it.isAnyLocalAddress||it.isLoopbackAddress||it.isLinkLocalAddress||it.isSiteLocalAddress||it.isMulticastAddress||(it.address.size==16&&(it.address[0].toInt() and 0xfe)==0xfc)}){"공개 노드 주소가 아닙니다"} }).build()
     }
 }

@@ -61,7 +61,7 @@ class WalletDesignRenderTest {
         compose.onNodeWithText("입금").assertIsDisplayed()
         compose.onNodeWithText("출금").assertIsDisplayed()
         compose.onNodeWithText("100.00000000 KAS").assertIsDisplayed()
-        compose.onNodeWithText("네트워크 승인").assertIsDisplayed()
+        compose.onNodeWithText("인덱서 승인 표시").assertIsDisplayed()
         capture("07-transactions")
         compose.runOnIdle{overwrite=true}
         compose.onNodeWithText("덮어쓰기").assertIsNotEnabled();capture("08-overwrite-consent")
