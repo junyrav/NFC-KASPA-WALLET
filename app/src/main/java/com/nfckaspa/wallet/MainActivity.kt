@@ -409,7 +409,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 try {
                                     val p=prepared?:error("송금 준비가 만료되었습니다")
                                     val from=address;val recipient=sendTo;val amount=sendAmount;val revision=inputRevision
-                                    sendInfo="독립 노드의 송금 입력을 다시 대조하고 있습니다";status=sendInfo
+                                    sendInfo="공개 노드의 송금 입력을 다시 대조하고 있습니다";status=sendInfo
                                     val witness=KaspaTransaction.revalidate(p,from)
                                     check(epoch==sessionEpoch){"작업이 잠겼습니다"}
                                     key=Crypto.finishDailyDecrypt(authenticated,rec)

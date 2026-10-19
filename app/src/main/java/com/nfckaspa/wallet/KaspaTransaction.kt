@@ -23,7 +23,7 @@ internal object KaspaTransaction {
     }
 
     suspend fun revalidate(p:Prepared,from:String):NetworkWitness {
-        val before=requireNotNull(p.witness){"독립 노드 대조 기록이 없습니다"}
+        val before=requireNotNull(p.witness){"공개 노드 대조 기록이 없습니다"}
         val current=NodeQuorum.verified(from,before.nodes).witness
         check(current.digest==before.digest){"확인 후 UTXO가 변경되었습니다. 수수료를 다시 계산하세요"}
         NodeAgreement.requireFresh(current,from,p.tx,android.os.SystemClock.elapsedRealtime())
@@ -64,15 +64,6 @@ internal object KaspaTransaction {
 
     fun signedRequest(tx: KaspaTx.Tx): String = JSONObject().put("transaction", txJson(tx)).put("allowOrphan", false).toString()
 
-    private fun fetchUtxos(address: String): List<KaspaTx.Utxo> {
-        val a = JSONArray(request("GET", "/addresses/$address/utxos"))
-        return (0 until a.length()).map { i ->
-            val o=a.getJSONObject(i); val op=o.getJSONObject("outpoint"); val e=o.getJSONObject("utxoEntry"); val spk=e.getJSONObject("scriptPublicKey")
-            KaspaTx.Utxo(KaspaTx.Outpoint(fromHex(op.getString("transactionId")),op.getLong("index")),e.getLong("amount"),spk.optInt("version",0),fromHex(spk.getString("scriptPublicKey")))
-        }
-    }
-
-    private fun feeRate():Double = parseFeeRate(request("GET","/info/fee-estimate"))
     internal fun parseFeeRate(response:String):Double {
         val o=JSONObject(response);val a=o.optJSONArray("normalBuckets")
         val rate=if(a!=null&&a.length()>0)a.getJSONObject(0).getDouble("feerate")
@@ -109,6 +100,5 @@ internal object KaspaTransaction {
 
     private fun request(method:String,path:String,body:String?=null)=KaspaNetwork.request(method,path,body)
     internal fun kasToSompi(t:String):Long { val s=t.trim();require(Regex("""\d+(\.\d{1,8})?""").matches(s)){"수량 형식 오류"};val p=s.split('.');val w=p[0].toLong();val f=if(p.size==2)p[1].padEnd(8,'0').toLong() else 0L;return Math.addExact(Math.multiplyExact(w,SOMPI),f).also { require(it>0) {"송금 수량은 0보다 커야 합니다"} } }
-    private fun fromHex(s:String):ByteArray {require(s.length%2==0&&Regex("[0-9a-fA-F]*").matches(s));return ByteArray(s.length/2){i->s.substring(i*2,i*2+2).toInt(16).toByte()}}
     private fun toHex(b:ByteArray)=b.joinToString(""){"%02x".format(it.toInt() and 255)}
 }

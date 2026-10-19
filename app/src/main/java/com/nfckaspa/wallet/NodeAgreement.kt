@@ -50,12 +50,12 @@ internal object NodeAgreement {
         require(nodes.map{it.host}.toSet().size==2&&nodes.map{it.uid}.toSet().size==2){"서로 다른 대조 노드 2곳이 필요합니다"}
         require(daa.all{it>=0}&&kotlin.math.abs(daa[0]-daa[1])<=1200){"대조 노드의 동기화 시점이 다릅니다"}
         val fingerprint=digest(rest)
-        check(snapshots.all{digest(it)==fingerprint}){"REST와 독립 노드의 UTXO 정보가 다릅니다. 서명하지 않았습니다. 잔액 갱신 후 다시 확인하세요"}
+        check(snapshots.all{digest(it)==fingerprint}){"REST와 공개 노드의 UTXO 정보가 다릅니다. 서명하지 않았습니다. 잔액 갱신 후 다시 확인하세요"}
         rates.forEach{FeePolicy.rate(it)}
         return AgreedUtxos(rest,NetworkWitness(address,fingerprint,nodes,now,rates.sorted()[1]))
     }
     fun requireFresh(witness:NetworkWitness?,address:String,tx:KaspaTx.Tx,now:Long) {
-        requireNotNull(witness){"독립 노드 대조 기록이 없습니다. 수수료를 다시 계산하세요"}
+        requireNotNull(witness){"공개 노드 대조 기록이 없습니다. 수수료를 다시 계산하세요"}
         require(witness.address==address&&now-witness.verifiedAt in 0..MAX_AGE&&witness.nodes.size==2&&witness.nodes.map{it.host}.toSet().size==2&&witness.nodes.map{it.uid}.toSet().size==2){"노드 대조가 만료되었습니다. 다시 확인하세요"}
         check(digest(tx.inputs.map{it.utxo})==witness.digest){"대조한 입력과 실제 서명 입력이 다릅니다"}
     }

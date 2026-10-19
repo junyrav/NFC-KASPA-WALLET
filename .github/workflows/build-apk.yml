@@ -41,7 +41,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "cmake;3.22.1"
 
       - name: Build and verify wallet
-        run: bash ./gradlew --write-verification-metadata sha256 -PliveNodeChecks=true :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleDebug :app:assembleMainnet :app:signingReport --stacktrace
+        run: bash ./gradlew --dependency-verification strict -PliveNodeChecks=true :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleMainnet :app:signingReport --stacktrace
 
       - name: Export dependency checksums
         if: always()

@@ -1,10 +1,10 @@
-# Kaspa NFC Wallet · v0.10.1 Mainnet
+# Kaspa NFC Wallet · v0.11.0 Mainnet
 
 Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name are **Kaspa NFC Wallet**.
 
 ## Network and installation
 - `kaspa:` P2PK mainnet addresses with checksum and spendable secp256k1 public-key validation. Testnet, ECDSA and script-hash recipient addresses are rejected.
-- Balance, UTXOs, transaction history, fee estimation, mass calculation and broadcast use `https://api.kaspa.org`. Explorer links use `https://explorer.kaspa.org`.
+- Displayed balance/history, mass calculation and broadcast use `https://api.kaspa.org`. Transfer UTXOs and fee estimates are cross-checked with two distinct public Kaspa wRPC node identities before preparation and again before signing. Pending acceptance also requires both nodes. Explorer links use `https://explorer.kaspa.org`.
 - See [SECURITY.md](SECURITY.md) for the audit response, overwrite consent, V3 card migration and remaining limitations.
 
 - The `mainnet` build installs as `com.nfckaspa.wallet.mainnet` alongside the earlier TN10 Preview app. It is not debuggable and does not import, overwrite or delete the Preview app's data.
@@ -30,10 +30,13 @@ Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name 
 - Android Keystore encryption is bound to the app/phone. After reinstalling or changing phones/packages, recover with two cards and re-register daily payloads.
 
 ## Build and validation
-JDK 17, Gradle 8.9, Android SDK 35:
+JDK 17, Gradle 8.9, Android SDK 35, NDK 28.2.13676358 and CMake 3.22.1. Initialize the pinned native source submodule and build the host JNI library for JVM tests first:
 
 ```sh
-bash ./gradlew --dependency-verification strict :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleMainnet
+git submodule update --init --recursive
+cmake -S app/src/main/cpp -B native-test -DCMAKE_BUILD_TYPE=Release
+cmake --build native-test --parallel 2
+bash ./gradlew --dependency-verification strict -PliveNodeChecks=true :app:testDebugUnitTest :app:lintDebug :app:lintMainnet :app:assembleMainnet
 ```
 
 CI attaches unit test results, lint reports and deterministic native Compose screen renders. Tests cover official address/signing vectors, input ownership, fee convergence, maximum sends, network separation, incoming/outgoing history, storage, recovery and UI navigation.
@@ -42,6 +45,6 @@ Automated validation does not broadcast a funded mainnet transaction or substitu
 
 Delivered mainnet APKs are signed after CI using the retained private delivery key, which is not committed. Raw mainnet Actions artifacts are unsigned. Future delivered mainnet APKs retain the same package and private certificate for in-place updates.
 
-Debug builds use a separate package, disable real mainnet creation/NFC/broadcast and are not distributed by CI. See SECURITY.md for important Classic-card, previous-ciphertext, JVM-signing and single-API limitations.
+Debug builds use a separate package, disable real mainnet creation/NFC/broadcast and are not distributed by CI. See SECURITY.md for important Classic-card, previous-ciphertext, native/JVM memory and public-node trust limitations.
 
 Initial interrupted registration can continue on the original phone using one committed current-generation card, its password and biometric Keystore authorization. This does not replace two-card recovery after reinstall or on another phone. Settings can temporarily allow screenshots; generated plaintext passwords remain protected. New password minimum is 8 characters at the owner's request; longer random passwords remain recommended.
