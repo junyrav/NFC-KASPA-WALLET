@@ -1,4 +1,4 @@
-# Kaspa NFC Wallet · v0.11.0 Mainnet
+# Kaspa NFC Wallet · v0.11.1 Mainnet
 
 Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name are **Kaspa NFC Wallet**.
 

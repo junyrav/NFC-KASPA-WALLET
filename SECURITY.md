@@ -1,4 +1,4 @@
-# Security review follow-up: 0.11.0-mainnet
+# Security review follow-up: 0.11.1-mainnet
 
 This document supersedes the 0.9.x behavior descriptions. Baseline reviewed by the external auditor: `acdd1c44230826d42c0cb213cc326ae898dba25c`. This is an implementation response, not an independent security certification. Review the final commit and CI results together.
 
@@ -74,3 +74,9 @@ The UI distinguishes registration, two-card recovery verification, and three-car
 - Public resolver endpoints and community proxy JSON service availability are best effort. There is no fallback to REST-only signing. Node outages or a legitimately changing UTXO set may temporarily block sends. The app sends its public address to these services; no private key, share or password is sent. Resolver UID/host distinction alone is not operator independence.
 - REST acceptance is only a candidate. Two nodes must independently report the exact TXID under an accepting chain block with the requested minimum confirmation count of 10. A conflicting transaction must additionally be decoded from node block data, reproduce its native-v0 TXID locally, and actually spend an original input. Unsupported conflict variants, pruned/oversized responses or missing evidence leave the pending lock in place. Exact retry/manual abandonment retain their previous semantics and duplicate-payment warning.
 - Native/JNI compatibility, official BIP-340 vectors, comparison with the prior signer, malformed node responses, freshness, UTXO disagreement, transport envelopes and a read-only live public-node query are checked in CI. Host tests do not replace Android device timing, NFC or funded-transfer testing. No funded transaction is broadcast by these checks.
+
+## 0.11.1 REST UTXO schema compatibility
+
+- Corrects fee preparation failing with `No value for version` on funded wallets. The REST UTXO model omits script version (native P2PK version zero) and serializes amount/DAA as decimal strings. The previous live check used an empty address, so it did not exercise any UTXO rows.
+- Only a missing REST script version defaults to zero. Explicit null, unsupported versions, malformed decimal strings, floats, signs and overflow still fail. wRPC integer parsing remains strict. The reconstructed wallet script and all normalized UTXO fields must still match both nodes; no source or signing check is bypassed.
+- Regression tests cover the real REST shape and both numeric encodings, malformed values, explicit invalid versions and foreign scripts. A mandatory read-only populated-address check compares an actual REST UTXO against both nodes, in addition to the empty-address quorum smoke test. It uses only public documentation/block addresses and never signs, broadcasts or tags a card.

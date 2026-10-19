@@ -11,6 +11,13 @@ internal object NodeAgreement {
     const val MAX_UTXOS=500
     const val MAX_AGE=30_000L
     fun number(o:JSONObject,key:String):Long {val n=o.get(key);require(n is Number&&n !is Double&&n !is Float){"노드 정수 형식 오류: $key"};return n.toLong().also{require(it>=0)}}
+    /** REST publishes amount/DAA as decimal strings; wRPC uses JSON integers. Never round or coerce. */
+    private fun restNumber(o:JSONObject,key:String):Long {
+        val value=o.get(key)
+        if(value !is String)return number(o,key)
+        require(value.matches(Regex("0|[1-9][0-9]{0,18}"))){"REST 정수 형식 오류: $key"}
+        return requireNotNull(value.toLongOrNull()){"REST 정수 범위 오류: $key"}
+    }
     fun bool(o:JSONObject,key:String):Boolean {val value=o.get(key);require(value is Boolean);return value}
     fun hex(s:String,size:Int?=null):ByteArray {require(s.length%2==0&&s.matches(Regex("[0-9a-f]*"))&&(size==null||s.length==size*2));return ByteArray(s.length/2){s.substring(it*2,it*2+2).toInt(16).toByte()}}
     fun endpoint(uid:String,url:String):NodeEndpoint {
@@ -32,10 +39,12 @@ internal object NodeAgreement {
             if(row.has("address")&&!row.isNull("address"))require(row.getString("address")==address)
             val op=row.getJSONObject("outpoint");val e=row.getJSONObject("utxoEntry")
             val (version,script)=if(rpc){val raw=e.getString("scriptPublicKey");require(raw.length>=4);raw.take(4).toInt(16) to hex(raw.drop(4))}
-                else{val spk=e.getJSONObject("scriptPublicKey");number(spk,"version").also{require(it<=65535)}.toInt() to hex(spk.getString("scriptPublicKey"))}
-            val amount=number(e,"amount");val index=number(op,"index");require(index<=0xffffffffL&&amount in 1..2_870_400_000_000_000_000L)
+                else{val spk=e.getJSONObject("scriptPublicKey");val v=if(spk.has("version"))number(spk,"version") else 0L;require(v<=65535);v.toInt() to hex(spk.getString("scriptPublicKey"))}
+            val amount=if(rpc)number(e,"amount") else restNumber(e,"amount")
+            val daa=if(rpc)number(e,"blockDaaScore") else restNumber(e,"blockDaaScore")
+            val index=number(op,"index");require(index<=0xffffffffL&&amount in 1..2_870_400_000_000_000_000L)
             require(version==0&&script.contentEquals(owner)){"다른 지갑의 UTXO 응답입니다"}
-            KaspaTx.Utxo(KaspaTx.Outpoint(hex(op.getString("transactionId"),32),index),amount,version,script,number(e,"blockDaaScore"),bool(e,"isCoinbase"))
+            KaspaTx.Utxo(KaspaTx.Outpoint(hex(op.getString("transactionId"),32),index),amount,version,script,daa,bool(e,"isCoinbase"))
         }
         require(list.map{it.outpoint.transactionId.hex()+":"+it.outpoint.index}.toSet().size==list.size){"중복 UTXO 응답"}
         return list
