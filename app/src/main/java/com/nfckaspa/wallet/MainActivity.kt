@@ -64,6 +64,7 @@ import javax.crypto.spec.SecretKeySpec
 class MainActivity : FragmentActivity() {
     private var nfc:NfcAdapter?=null
     private var onTag:((Tag)->Unit)?=null
+    private var pendingTag:Tag?=null
     private var prompt:BiometricPrompt?=null
     private var authGeneration=0L
     override fun onCreate(b:Bundle?) {
@@ -89,13 +90,19 @@ class MainActivity : FragmentActivity() {
     }
     override fun onResume(){super.onResume();val i=Intent(this,javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);nfc?.enableForegroundDispatch(this,PendingIntent.getActivity(this,0,i,PendingIntent.FLAG_MUTABLE),null,arrayOf(arrayOf(MifareClassic::class.java.name)))}
     override fun onPause(){nfc?.disableForegroundDispatch(this);super.onPause()}
-    override fun onStop(){authGeneration++;prompt?.cancelAuthentication();prompt=null;super.onStop()}
+    override fun onPostResume(){
+        super.onPostResume()
+        val tag=pendingTag;pendingTag=null
+        if(tag!=null)onTag?.invoke(tag)
+    }
+    override fun onStop(){pendingTag=null;authGeneration++;prompt?.cancelAuthentication();prompt=null;super.onStop()}
     override fun onNewIntent(i:Intent) {
         super.onNewIntent(i)
         if(i.action !in setOf(NfcAdapter.ACTION_TAG_DISCOVERED,NfcAdapter.ACTION_TECH_DISCOVERED,NfcAdapter.ACTION_NDEF_DISCOVERED))return
-        if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))return
+        // Android pauses a singleTop activity before onNewIntent. Consume only after resume.
+        if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))return
         val tag=if(android.os.Build.VERSION.SDK_INT>=33)i.getParcelableExtra(NfcAdapter.EXTRA_TAG,Tag::class.java) else @Suppress("DEPRECATION") i.getParcelableExtra(NfcAdapter.EXTRA_TAG)
-        if(tag!=null)onTag?.invoke(tag)
+        if(tag!=null)pendingTag=tag
     }
 }
 
