@@ -19,6 +19,8 @@ class NfcDispatchTest {
     private fun tag():Tag=Tag::class.java.getDeclaredMethod("createMockTag",ByteArray::class.java,IntArray::class.java,Array<Bundle>::class.java)
         .invoke(null,byteArrayOf(1,2,3,4),intArrayOf(),arrayOf<Bundle>()) as Tag
     private fun intent(tag:Tag,action:String=NfcAdapter.ACTION_TECH_DISCOVERED)=Intent(action).putExtra(NfcAdapter.EXTRA_TAG,tag)
+    private fun MainActivity.deliver(i:Intent) = MainActivity::class.java.getDeclaredMethod("onNewIntent",Intent::class.java).apply{isAccessible=true}.invoke(this,i)
+    private fun MainActivity.postResume() = MainActivity::class.java.getDeclaredMethod("onPostResume").apply{isAccessible=true}.invoke(this)
     @Test fun pausedNfcIntentIsDeliveredOnceAfterResume() {
         val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
         try {
@@ -26,10 +28,10 @@ class NfcDispatchTest {
             assertEquals(Lifecycle.State.STARTED,activity.lifecycle.currentState)
             var count=0;val card=tag()
             ReflectionHelpers.setField(activity,"onTag",{received:Tag->assertSame(card,received);count++})
-            activity.onNewIntent(intent(card));assertEquals(0,count)
-            controller.resume();activity.onPostResume()
+            activity.deliver(intent(card));assertEquals(0,count)
+            controller.resume();activity.postResume()
             assertEquals(1,count)
-            activity.onPostResume();assertEquals(1,count)
+            activity.postResume();assertEquals(1,count)
         } finally {controller.pause().stop().destroy()}
     }
     @Test fun backgroundAndUnrelatedIntentsCannotDeliverTags() {
@@ -37,11 +39,11 @@ class NfcDispatchTest {
         try {
             val activity=controller.get();controller.pause();var count=0
             ReflectionHelpers.setField(activity,"onTag",{_:Tag->count++})
-            activity.onNewIntent(intent(tag(),Intent.ACTION_VIEW))
-            activity.onPostResume();assertEquals(0,count)
-            activity.onNewIntent(intent(tag()))
-            controller.stop();activity.onPostResume();assertEquals(0,count)
-            activity.onNewIntent(intent(tag()));activity.onPostResume();assertEquals(0,count)
+            activity.deliver(intent(tag(),Intent.ACTION_VIEW))
+            activity.postResume();assertEquals(0,count)
+            activity.deliver(intent(tag()))
+            controller.stop();activity.postResume();assertEquals(0,count)
+            activity.deliver(intent(tag()));activity.postResume();assertEquals(0,count)
             controller.start().resume()
         } finally {controller.pause().stop().destroy()}
     }
