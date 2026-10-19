@@ -1,0 +1,5 @@
+native-test/
+app/.cxx/
+app/build/
+.gradle/
+local.properties

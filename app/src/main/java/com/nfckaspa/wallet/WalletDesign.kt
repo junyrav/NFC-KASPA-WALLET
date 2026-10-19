@@ -387,7 +387,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
     SettingsGroup("네트워크") {
         SettingsRow(Icons.Outlined.Public,"네트워크","Kaspa Mainnet"){a.setting("network")}
-        SettingsRow(Icons.Outlined.Dns,"노드","공식 API (기본값)"){a.setting("node")}
+        SettingsRow(Icons.Outlined.Dns,"노드","REST + 공개 노드 2곳"){a.setting("node")}
     }
     SettingsGroup("앱 정보") {
         SettingsRow(Icons.Outlined.Info,"버전",BuildConfig.VERSION_NAME){a.setting("version")}
@@ -446,6 +446,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         Text("메인넷 입금 · 출금 내역",Modifier.weight(1f),fontSize=12.sp,color=Muted)
         TextButton(onClick=a.historyRefresh,enabled=!s.historyLoading){Text(if(s.historyLoading)"조회 중…" else "새로고침")}
     }
+    Text("과거 내역은 인덱서 조회 정보입니다. 송금 결과 확인은 공개 노드 2곳을 추가 대조합니다.",fontSize=11.sp,color=Muted)
     if(s.historyError.isNotBlank())Text(s.historyError,fontSize=12.sp,color=Muted)
     if(s.pending)WhiteCard {
         Text("제출 결과 확인이 필요한 거래",fontWeight=FontWeight.Bold,color=Ink)
@@ -461,7 +462,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     }
     records.forEach {tx->WhiteCard {
         Row(verticalAlignment=Alignment.CenterVertically){Icon(if(tx.direction=="in")Icons.Outlined.SouthWest else Icons.Outlined.NorthEast,null,tint=Teal);Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){Text(when(tx.direction){"in"->"입금";"self"->"내 주소로 전송";"out"->"출금";else->"거래 확인 중"},fontWeight=FontWeight.SemiBold,color=Ink);Text(SimpleDateFormat("yyyy.MM.dd HH:mm",Locale.KOREA).format(Date(tx.time)),fontSize=11.sp,color=Muted)};Text("${tx.amount} KAS",fontWeight=FontWeight.SemiBold,color=Ink)}
-        Text(when(tx.state){"accepted"->"네트워크 승인";"submitted"->"제출됨 · 승인 확인 대기";"unaccepted"->"네트워크 미승인";else->"승인 상태 확인 중"},fontSize=11.sp,color=Muted)
+        Text(when(tx.state){"accepted"->"인덱서 승인 표시";"submitted"->"제출됨 · 승인 확인 대기";"unaccepted"->"네트워크 미승인";else->"승인 상태 확인 중"},fontSize=11.sp,color=Muted)
         if(tx.to.isNotBlank())Text(shortKaspaAddress(tx.to),fontSize=12.sp,color=Muted)
         Row{TextButton(onClick={a.copy(tx.txid)}){Text("TXID 복사")};TextButton(onClick={a.explorer(tx.txid)}){Text("Explorer에서 보기")}}
     }}

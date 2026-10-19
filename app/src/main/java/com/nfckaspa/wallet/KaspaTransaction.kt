@@ -8,16 +8,26 @@ import org.json.JSONObject
 /** Mainnet version-0 P2PK transaction preparation. */
 internal object KaspaTransaction {
     private const val SOMPI = 100_000_000L
-    data class Prepared(val tx: KaspaTx.Tx, val fee: Long, val relayFloor:Boolean=false)
+    data class Prepared(val tx: KaspaTx.Tx, val fee: Long, val relayFloor:Boolean=false,val witness:NetworkWitness?=null)
 
     suspend fun prepare(from:String,to:String,amountText:String):Prepared=withContext(Dispatchers.IO) {
         KaspaAddress.mainnetPayload(from);KaspaAddress.recipientPayload(to)
-        build(from,to,kasToSompi(amountText),fetchUtxos(from),feeRate(),::mass)
+        val agreed=NodeQuorum.verified(from)
+        build(from,to,kasToSompi(amountText),agreed.utxos,agreed.witness.feeRate,::mass).copy(witness=agreed.witness)
     }
 
     suspend fun prepareMaximum(from:String,to:String):Prepared=withContext(Dispatchers.IO) {
         KaspaAddress.mainnetPayload(from);KaspaAddress.recipientPayload(to)
-        build(from,to,null,fetchUtxos(from),feeRate(),::mass)
+        val agreed=NodeQuorum.verified(from)
+        build(from,to,null,agreed.utxos,agreed.witness.feeRate,::mass).copy(witness=agreed.witness)
+    }
+
+    suspend fun revalidate(p:Prepared,from:String):NetworkWitness {
+        val before=requireNotNull(p.witness){"독립 노드 대조 기록이 없습니다"}
+        val current=NodeQuorum.verified(from,before.nodes).witness
+        check(current.digest==before.digest){"확인 후 UTXO가 변경되었습니다. 수수료를 다시 계산하세요"}
+        NodeAgreement.requireFresh(current,from,p.tx,android.os.SystemClock.elapsedRealtime())
+        return current
     }
 
     /** Re-price the actual outputs after subtracting the fee: KIP-9 storage mass depends on change. */

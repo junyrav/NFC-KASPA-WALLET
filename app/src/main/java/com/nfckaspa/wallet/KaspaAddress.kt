@@ -1,28 +1,21 @@
 package com.nfckaspa.wallet
 
-import java.math.BigInteger
 import java.security.SecureRandom
-import org.bouncycastle.crypto.ec.CustomNamedCurves
 
 object KaspaAddress {
     private val alphabet = "qpzry9x8gf2tvdw0s3jn54khce6mua7l".toCharArray()
-    private val curve = CustomNamedCurves.getByName("secp256k1")
     private val rng = SecureRandom()
 
     fun newPrivateKey(): ByteArray {
         while (true) {
             val b = ByteArray(32).also { rng.nextBytes(it) }
-            val d = BigInteger(1, b)
-            if (d.signum() > 0 && d < curve.n) return b
+            if (NativeSecp.validKey(b)) return b
+            b.fill(0)
         }
     }
 
     fun xOnlyPublicKey(privateKey: ByteArray): ByteArray {
-        require(privateKey.size == 32)
-        val d = BigInteger(1, privateKey)
-        require(d.signum() > 0 && d < curve.n)
-        val raw = curve.g.multiply(d).normalize().affineXCoord.encoded
-        return if (raw.size == 32) raw else ByteArray(32).also { raw.copyInto(it, 32 - raw.size) }
+        return NativeSecp.publicKey(privateKey)
     }
 
     fun mainnet(privateKey: ByteArray): String {
@@ -58,10 +51,7 @@ object KaspaAddress {
         return payload.copyOfRange(1, 33)
     }
 
-    fun isValidXOnlyPublicKey(x:ByteArray):Boolean = x.size==32 && BigInteger(1,x)<curve.curve.field.characteristic && runCatching {
-        val point=curve.curve.decodePoint(byteArrayOf(2)+x).normalize()
-        !point.isInfinity && point.isValid
-    }.getOrDefault(false)
+    fun isValidXOnlyPublicKey(x:ByteArray):Boolean = NativeSecp.validPublicKey(x)
     fun recipientPayload(address:String):ByteArray = mainnetPayload(address).also {
         require(isValidXOnlyPublicKey(it)){"유효한 공개키가 아닌 주소입니다. 수신 주소를 다시 확인하세요"}
     }

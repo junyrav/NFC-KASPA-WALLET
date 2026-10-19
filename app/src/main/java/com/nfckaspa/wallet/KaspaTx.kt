@@ -1,9 +1,6 @@
 package com.nfckaspa.wallet
 
 import org.bouncycastle.crypto.digests.Blake2bDigest
-import org.bouncycastle.crypto.ec.CustomNamedCurves
-import java.math.BigInteger
-import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
@@ -12,7 +9,7 @@ import java.security.SecureRandom
  */
 internal object KaspaTx {
     data class Outpoint(val transactionId: ByteArray, val index: Long)
-    data class Utxo(val outpoint: Outpoint, val amount: Long, val scriptVersion: Int, val script: ByteArray)
+    data class Utxo(val outpoint: Outpoint, val amount: Long, val scriptVersion: Int, val script: ByteArray, val blockDaaScore:Long=0, val isCoinbase:Boolean=false)
     data class Input(val utxo: Utxo, val sequence: Long = 0L, var signatureScript: ByteArray = byteArrayOf(), val sigOpCount: Int = 1)
     data class Output(val amount: Long, val scriptVersion: Int = 0, val script: ByteArray)
     data class Tx(val version: Int = 0, val inputs: List<Input>, val outputs: List<Output>, val lockTime: Long = 0L)
@@ -52,40 +49,10 @@ internal object KaspaTx {
         )
     }
 
-    private val curve=CustomNamedCurves.getByName("secp256k1")
-    private val n:BigInteger=curve.n
-    private val g=curve.g
-    private fun bytes32(x:BigInteger):ByteArray{
-        val a=x.toByteArray();return when{a.size==32->a;a.size<32->ByteArray(32-a.size)+a;else->a.copyOfRange(a.size-32,a.size)}
-    }
-    private fun xor(a:ByteArray,b:ByteArray)=ByteArray(a.size){i->(a[i].toInt() xor b[i].toInt()).toByte()}
-    private fun sha(b:ByteArray)=MessageDigest.getInstance("SHA-256").digest(b)
-    private fun tagged(tag:String,msg:ByteArray):ByteArray{val t=sha(tag.toByteArray(Charsets.US_ASCII));return sha(t+t+msg)}
-
-    /** BIP-340 Schnorr signature used by Kaspa P2PK. */
-    fun bip340Sign(msg32:ByteArray,privateKey:ByteArray,aux:ByteArray=ByteArray(32).also{SecureRandom().nextBytes(it)}):ByteArray{
-        require(msg32.size==32&&privateKey.size==32&&aux.size==32)
-        val d0=BigInteger(1,privateKey);require(d0>BigInteger.ZERO&&d0<n)
-        val p=g.multiply(d0).normalize();val d=if(p.affineYCoord.toBigInteger().testBit(0))n.subtract(d0) else d0
-        val px=bytes32(p.affineXCoord.toBigInteger())
-        val t=xor(bytes32(d),tagged("BIP0340/aux",aux))
-        val k0=BigInteger(1,tagged("BIP0340/nonce",t+px+msg32)).mod(n);require(k0!=BigInteger.ZERO)
-        val rPoint=g.multiply(k0).normalize();val k=if(rPoint.affineYCoord.toBigInteger().testBit(0))n.subtract(k0) else k0
-        val rx=bytes32(rPoint.affineXCoord.toBigInteger())
-        val e=BigInteger(1,tagged("BIP0340/challenge",rx+px+msg32)).mod(n)
-        return rx+bytes32(k.add(e.multiply(d)).mod(n))
-    }
-
-    /** BIP-340 verification over public data, also run before releasing any signature. */
-    internal fun bip340Verify(msg:ByteArray,pub:ByteArray,sig:ByteArray):Boolean=runCatching {
-        require(msg.size==32&&pub.size==32&&sig.size==64)
-        val p=curve.curve.decodePoint(byteArrayOf(2)+pub).normalize()
-        val r=BigInteger(1,sig.copyOfRange(0,32));val scalar=BigInteger(1,sig.copyOfRange(32,64))
-        require(r<curve.curve.field.characteristic&&scalar<n)
-        val e=BigInteger(1,tagged("BIP0340/challenge",sig.copyOfRange(0,32)+pub+msg)).mod(n)
-        val point=g.multiply(scalar).subtract(p.multiply(e)).normalize()
-        !point.isInfinity&&!point.affineYCoord.toBigInteger().testBit(0)&&point.affineXCoord.toBigInteger()==r
-    }.getOrDefault(false)
+    /** BIP-340: pinned upstream libsecp256k1, with fresh auxiliary randomness in production. */
+    fun bip340Sign(msg32:ByteArray,privateKey:ByteArray,aux:ByteArray=ByteArray(32).also{SecureRandom().nextBytes(it)}):ByteArray =
+        NativeSecp.sign(msg32,privateKey,aux)
+    internal fun bip340Verify(msg:ByteArray,pub:ByteArray,sig:ByteArray):Boolean=NativeSecp.verify(msg,pub,sig)
 
     fun signAll(tx:Tx,privateKey:ByteArray){
         require(tx.version==0&&tx.inputs.isNotEmpty()&&tx.outputs.isNotEmpty()){"지원하지 않는 거래 형식입니다"}

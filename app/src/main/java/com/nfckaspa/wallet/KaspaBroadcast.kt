@@ -45,12 +45,31 @@ internal object KaspaBroadcast {
     suspend fun reconcile(wallet:String,txid:String,request:String):Resolution=withContext(Dispatchers.IO) {
         require(txid.matches(Regex("[0-9a-f]{64}")));KaspaAddress.mainnetPayload(wallet);requestOutpoints(request)
         val known=runCatching{JSONObject(KaspaNetwork.request("GET","/transactions/$txid"))}.getOrNull()
-        if(known?.optString("transaction_id")==txid&&known.optBoolean("is_accepted",false))return@withContext Resolution.ACCEPTED
-        // Absence/unspent inputs never prove rejection. Only positive accepted conflict evidence releases the lock.
+        if(known?.optString("transaction_id")==txid&&known.optBoolean("is_accepted",false)) {
+            val accepting=known.optString("accepting_block_hash")
+            if(accepting.matches(Regex("[0-9a-f]{64}"))&&NodeQuorum.confirms(txid,accepting))return@withContext Resolution.ACCEPTED
+        }
+        // The REST row is only a candidate. Both nodes must independently confirm acceptance;
+        // a conflicting row must additionally prove its actual v0 inputs from node block data.
+        var candidates=0
         for(offset in 0 until 500 step 50) {
             val body=KaspaNetwork.request("GET","/addresses/$wallet/full-transactions?limit=50&offset=$offset&resolve_previous_outpoints=no")
-            val result=evidence(txid,request,body);if(result!=Resolution.UNKNOWN)return@withContext result
-            if(org.json.JSONArray(body).length()<50)break
+            val rows=org.json.JSONArray(body)
+            for(i in 0 until rows.length()) {
+                val row=rows.getJSONObject(i)
+                val candidate=evidence(txid,request,org.json.JSONArray().put(row).toString())
+                if(candidate==Resolution.UNKNOWN)continue
+                if(++candidates>5)return@withContext Resolution.UNKNOWN
+                val id=row.getString("transaction_id")
+                val detail=if(row.optString("accepting_block_hash").matches(Regex("[0-9a-f]{64}")))row
+                    else JSONObject(KaspaNetwork.request("GET","/transactions/$id"))
+                val accepting=detail.optString("accepting_block_hash")
+                if(!accepting.matches(Regex("[0-9a-f]{64}")))continue
+                if(candidate==Resolution.ACCEPTED&&NodeQuorum.confirms(txid,accepting))return@withContext Resolution.ACCEPTED
+                val hash=detail.optJSONArray("block_hash")?.optString(0).orEmpty()
+                if(candidate==Resolution.CONFLICTED&&hash.matches(Regex("[0-9a-f]{64}"))&&NodeQuorum.confirms(id,accepting,request,hash))return@withContext Resolution.CONFLICTED
+            }
+            if(rows.length()<50)break
         }
         Resolution.UNKNOWN
     }

@@ -7,13 +7,15 @@ plugins {
 android {
     namespace = "com.nfckaspa.wallet"
     compileSdk = 35
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
 
     defaultConfig {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.10.1-mainnet"
+        versionCode = 27
+        versionName = "0.11.0-mainnet"
         resValue("string", "app_name", "Kaspa NFC Wallet")
     }
 
@@ -39,7 +41,10 @@ android {
         buildConfig = true
     }
     kotlinOptions { jvmTarget = "17" }
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    testOptions { unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.systemProperty("kaspa.native.testLibrary",rootProject.file("native-test/libkaspa_secp.so").absolutePath)
+            it.systemProperty("kaspa.liveChecks",providers.gradleProperty("liveNodeChecks").orElse("false").get()) }
+    }
 }
 
 dependencies {
@@ -55,6 +60,8 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.82")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.compose.ui:ui-test-junit4")
