@@ -296,6 +296,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             val epoch=sessionEpoch
             busy=true
             scope.launch {
+                var releaseBusy=true
                 try {
                     check(!BuildConfig.DEBUG){"디버그 빌드는 실제 메인넷 카드를 읽거나 쓰지 않습니다"}
                     val snapshot=withContext(Dispatchers.IO){NfcCards.read(tag)}
@@ -377,14 +378,16 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                     key=Crypto.finishDailyDecrypt(authenticated,rec)
                                     check(KaspaAddress.mainnet(key!!)==address){"현재 지갑의 카드가 아닙니다"}
                                     val p=prepared?:error("송금 준비가 만료되었습니다")
-                                    KaspaTransaction.validateIntent(p,address,sendTo,sendAmount)
+                                    val from=address;val recipient=sendTo;val amount=sendAmount;val revision=inputRevision
+                                    KaspaTransaction.validateIntent(p,from,recipient,amount)
                                     val signingKey=key!!
                                     val request=withContext(Dispatchers.Default){KaspaTx.signAll(p.tx,signingKey);KaspaTransaction.signedRequest(p.tx)}
                                     key?.fill(0);key=null
                                     check(epoch==sessionEpoch){"작업이 잠겼습니다"}
+                                    check(address==from&&sendTo==recipient&&sendAmount==amount&&inputRevision==revision){"서명 중 송금 입력이 변경되었습니다. 제출하지 않았습니다"}
                                     val txid=KaspaTx.transactionId(p.tx)
-                                    WalletStore.savePending(context,WalletStore.Pending(address,txid,request,sendTo,sendAmount,p.fee,System.currentTimeMillis()))
-                                    WalletStore.record(context,address,txid,sendTo,sendAmount,p.fee)
+                                    WalletStore.savePending(context,WalletStore.Pending(from,txid,request,recipient,amount,p.fee,System.currentTimeMillis()))
+                                    WalletStore.record(context,from,txid,recipient,amount,p.fee)
                                     history=WalletStore.history(context)
                                     prepared=null;sendInfo="메인넷 네트워크에 제출 중입니다"
                                     val acknowledged=KaspaBroadcast.postTransaction(request)
@@ -396,6 +399,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 finally{key?.fill(0);busy=false}
                             }
                         }
+                        releaseBusy=false // The biometric callback owns the signing/submission lock.
                         return@launch
                     } else if(recoveryMode) {
                         val pw=pass.toCharArray()
@@ -436,7 +440,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                         } finally {sh.fill(0)}
                     }
                 } catch(e:Exception){status="처리 실패 · ${e.message?:"카드와 비밀번호를 확인하세요"}"}
-                finally{busy=false}
+                finally{if(releaseBusy)busy=false}
             }
         }
     } }
