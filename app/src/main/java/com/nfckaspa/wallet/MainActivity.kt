@@ -574,7 +574,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         recover={keepRecoveryKey=cardMarks.size<3;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status="서로 다른 등록 카드 2장을 태그하세요"},unlock={keepRecoveryKey=true;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status="카드 교체를 위해 카드 2장으로 잠금을 해제하세요"},register={prepareCard(it)},
         explorer={id->if(Regex("[0-9a-fA-F]{64}").matches(id))runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("${KaspaNetwork.EXPLORER}/txs/$id"))) }},
         setting={id->when(id){
-            "capture"->{captureAllowed=!captureAllowed;status=if(captureAllowed)"문제 확인용 화면 캡처 허용 · 앱을 벗어나면 다시 차단됩니다" else "화면 캡처를 차단했습니다"}
+            "capture"->{captureAllowed=!captureAllowed;ScreenCapturePolicy.apply((context as android.app.Activity).window,captureAllowed,showGenerated);status=if(captureAllowed)"문제 확인용 화면 캡처 허용 · 앱을 벗어나면 다시 차단됩니다" else "화면 캡처를 차단했습니다"}
             "locknow"->{lockSecrets();status="개인키와 비밀번호를 잠갔습니다"}
             "paste"->{val cm=context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;val candidate=cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty();sendTo=candidate;if(runCatching{KaspaAddress.recipientPayload(candidate)}.isFailure)sendInfo="주소 형식·체크섬·공개키를 확인하세요";prepared=null;displayedFee=null;sendAll=false;inputRevision++}
             "recovery"->{if(cardMarks.size<3||!backupVerified)settingDialog="backup" else {secret?.fill(0);secret=null;shares.values.forEach{it.fill(0)};shares=emptyMap();tab="Cards";status="복구 비밀번호를 입력하고 카드 2장으로 복구를 검증하세요"}}

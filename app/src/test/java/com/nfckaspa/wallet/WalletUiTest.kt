@@ -62,6 +62,7 @@ class WalletUiTest {
         ActivityScenario.launch(MainActivity::class.java).use{scenario->
             compose.onNodeWithText("설정",useUnmergedTree=true).performClick()
             compose.onNodeWithText("문제 확인용 화면 캡처").performScrollTo().performClick()
+            compose.onNodeWithText("허용 중").assertExists()
             scenario.onActivity{org.junit.Assert.assertEquals(0,it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE)}
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
