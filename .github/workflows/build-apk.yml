@@ -12,7 +12,7 @@ jobs:
   build:
     if: ${{ !startsWith(github.event.head_commit.message, 'Export APK tools') }}
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -73,7 +73,7 @@ jobs:
   verification-tool:
     if: ${{ startsWith(github.event.head_commit.message, 'Export APK tools') }}
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Export APK verification tool
         run: |
@@ -87,3 +87,4 @@ jobs:
           name: apk-verification-tool
           path: verification-tools/apksigner.jar
           if-no-files-found: error
+
