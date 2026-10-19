@@ -21,10 +21,11 @@ internal object KaspaMass {
     fun calculate(tx:KaspaTx.Tx)=parts(tx).total
 }
 internal object FeePolicy {
-    const val MAX_RATE=10.0
+    const val MIN_RATE=100.0 // Current mainnet relay floor, sompi/gram (Toccata).
+    const val MAX_RATE=1000.0 // Ten times the relay floor; total/relative caps remain mandatory.
     const val MAX_FEE=1_000_000L // 0.01 KAS, additionally limited to 1% (with a 0.0001 KAS floor).
-    fun rate(rate:Double){require(rate.isFinite()&&rate in 1.0..MAX_RATE){"네트워크 수수료율이 허용 범위를 벗어났습니다. 나중에 다시 확인하세요"}}
+    fun rate(rate:Double){require(rate.isFinite()&&rate in MIN_RATE..MAX_RATE){"네트워크 수수료율 $rate sompi/gram이 허용 범위($MIN_RATE–$MAX_RATE)를 벗어났습니다. 서명하지 않았습니다"}}
     fun check(fee:Long,amount:Long,mass:Long) {
-        require(fee>0&&amount>0&&fee<=MAX_FEE&&fee<=maxOf(10_000L,amount/100)&&fee<=Math.multiplyExact(mass,10)) {"수수료가 보안 상한을 초과했습니다. 송금을 중단했습니다"}
+        require(fee>0&&amount>0&&fee<=MAX_FEE&&fee<=maxOf(10_000L,amount/100)&&fee<=Math.multiplyExact(mass,MAX_RATE.toLong())) {"수수료가 보안 상한을 초과했습니다. 송금을 중단했습니다"}
     }
 }

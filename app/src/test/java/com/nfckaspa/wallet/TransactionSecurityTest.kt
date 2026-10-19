@@ -13,13 +13,13 @@ class TransactionSecurityTest {
     }
     @Test fun localMassReproducesSmallSplitRestrictionButAllowsMaximum() {
         val input=utxo(19821000)
-        assertThrows(IllegalArgumentException::class.java){KaspaTransaction.build(from,to,9000000,listOf(input),1.0,KaspaMass::calculate)}
-        val max=KaspaTransaction.build(from,to,null,listOf(input),1.0,KaspaMass::calculate)
-        assertEquals(1624L,max.fee)
+        assertThrows(IllegalArgumentException::class.java){KaspaTransaction.build(from,to,9000000,listOf(input),100.0,KaspaMass::calculate)}
+        val max=KaspaTransaction.build(from,to,null,listOf(input),100.0,KaspaMass::calculate)
+        assertEquals(162400L,max.fee)
         KaspaTransaction.validateIntent(max,from,to,java.math.BigDecimal.valueOf(max.tx.outputs[0].amount,8).toPlainString())
     }
     @Test fun confirmationMustMatchRecipientAmountFeeAndChange() {
-        val p=KaspaTransaction.build(from,to,100000000,listOf(utxo(200000000)),1.0,KaspaMass::calculate)
+        val p=KaspaTransaction.build(from,to,100000000,listOf(utxo(200000000)),100.0,KaspaMass::calculate)
         KaspaTransaction.validateIntent(p,from,to,"1")
         assertThrows(IllegalArgumentException::class.java){KaspaTransaction.validateIntent(p,from,from,"1")}
         assertThrows(IllegalArgumentException::class.java){KaspaTransaction.validateIntent(p,from,to,"0.9")}
@@ -34,4 +34,14 @@ class TransactionSecurityTest {
         assertEquals(before,KaspaTx.transactionId(tx))
         assertNotEquals(before,KaspaTx.transactionId(tx.copy(outputs=listOf(tx.outputs[0].copy(amount=199990001)))))
     }
+    @Test fun maximumPointTwoKasUsesCurrentRelayRateAndPreservesFeeCaps() {
+        val p=KaspaTransaction.build(from,to,null,listOf(utxo(20_000_000)),100.0,KaspaMass::calculate)
+        assertEquals(162400L,p.fee)
+        assertEquals(19837600L,p.tx.outputs.single().amount)
+        KaspaTransaction.validateIntent(p,from,to,"0.198376")
+        assertThrows(IllegalArgumentException::class.java){KaspaTransaction.build(from,to,null,listOf(utxo(20_000_000)),1000.0,KaspaMass::calculate)}
+        for(rate in listOf(1.0,10.0,99.0,1001.0,Double.NaN,Double.POSITIVE_INFINITY))
+            assertThrows(IllegalArgumentException::class.java){FeePolicy.rate(rate)}
+    }
+
 }

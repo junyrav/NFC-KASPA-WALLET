@@ -42,7 +42,7 @@ internal object KaspaTransaction {
             val mass=massOf(provisional)
             require(mass in 1..100_000L){"소액 분할 또는 입력 개수로 네트워크 한도를 초과했습니다. 전액 입력을 선택하면 잔액 전체(수수료 제외)를 계산합니다. 부분 송금 수량은 자동으로 바꾸지 않습니다"}
             val needed=java.math.BigDecimal.valueOf(rate).multiply(java.math.BigDecimal.valueOf(mass))
-                .setScale(0,java.math.RoundingMode.CEILING).longValueExact().coerceAtLeast(mass)
+                .setScale(0,java.math.RoundingMode.CEILING).longValueExact().coerceAtLeast(Math.multiplyExact(mass,FeePolicy.MIN_RATE.toLong()))
             FeePolicy.check(needed,outputs.first().amount,mass)
             if(fee>=needed)return Prepared(KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it)},outputs=outputs),fee)
             fee=needed
@@ -60,7 +60,14 @@ internal object KaspaTransaction {
         }
     }
 
-    private fun feeRate():Double { val o=JSONObject(request("GET","/info/fee-estimate")); val a=o.optJSONArray("normalBuckets"); if(a!=null&&a.length()>0)return a.getJSONObject(0).getDouble("feerate"); return o.optJSONObject("priorityBucket")?.optDouble("feerate",1.0)?:1.0 }
+    private fun feeRate():Double = parseFeeRate(request("GET","/info/fee-estimate"))
+    internal fun parseFeeRate(response:String):Double {
+        val o=JSONObject(response);val a=o.optJSONArray("normalBuckets")
+        val rate=if(a!=null&&a.length()>0)a.getJSONObject(0).getDouble("feerate")
+            else o.getJSONObject("priorityBucket").getDouble("feerate")
+        FeePolicy.rate(rate)
+        return rate
+    }
     // /transactions/mass expects SubmitTxModel itself, unlike /transactions which expects {transaction: ...}.
     private fun mass(tx:KaspaTx.Tx):Long {
         val local=KaspaMass.parts(tx)
@@ -79,7 +86,7 @@ internal object KaspaTransaction {
         require(fee==p.fee){"확인한 수수료와 실제 거래가 다릅니다"}
         val mass=KaspaMass.calculate(tx);require(mass<=100_000)
         FeePolicy.check(fee,tx.outputs[0].amount,mass)
-        require(fee>=mass){"수수료가 네트워크 최소값보다 작습니다"}
+        require(fee>=Math.multiplyExact(mass,FeePolicy.MIN_RATE.toLong())){"수수료가 네트워크 최소값보다 작습니다"}
     }
 
 
