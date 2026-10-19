@@ -23,10 +23,16 @@ internal object NfcCards {
     fun write(tag:Tag,record:CardRecord,expected:ByteArray) = connected(tag) { m->
         val snapshot=CardSnapshot(bank(m,0),bank(m,1))
         check(java.security.MessageDigest.isEqual(Crypto.sha(snapshot.bytes),expected)){"확인한 뒤 카드 데이터가 바뀌었습니다. 다시 확인하세요"}
-        check(record.sequence>(snapshot.latest?.sequence?:0)){"카드 저장 시각이 맞지 않습니다. 자동 날짜·시간을 확인하세요"}
+        check(record.sequence>(snapshot.latest?.sequence?:0)){"카드 순서가 변경되었습니다. 다시 준비하세요"}
         CardJournal.commit(snapshot,record,{ bank,index,bytes->
             val sector=1+bank*6+index/3
             auth(m,sector);m.writeBlock(m.sectorToBlock(sector)+index%3,bytes)
         },{bank->bank(m,bank)})
     }
+    fun cleanup(tag:Tag,record:CardRecord,expected:ByteArray)=connected(tag){m->
+        val snapshot=CardSnapshot(bank(m,0),bank(m,1))
+        check(java.security.MessageDigest.isEqual(Crypto.sha(snapshot.bytes),expected)){"카드 내용이 변경되었습니다"}
+        CardCleanup.erase(snapshot,record,{b,i,bytes->val sector=1+b*6+i/3;auth(m,sector);m.writeBlock(m.sectorToBlock(sector)+i%3,bytes)},{bank(m,it)})
+    }
+
 }

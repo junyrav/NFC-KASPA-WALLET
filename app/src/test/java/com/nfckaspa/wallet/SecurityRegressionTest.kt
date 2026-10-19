@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @Config(sdk=[28])
 class SecurityRegressionTest {
     private val c get()=RuntimeEnvironment.getApplication()
-    @Before fun clear(){c.getSharedPreferences("kaspa_nfc_wallet_mainnet",0).edit().clear().commit()}
+    @Before fun clear(){listOf("",".bak",".new").forEach{java.io.File(c.filesDir,"pending-payment-v3.json$it").delete()};c.getSharedPreferences("kaspa_nfc_wallet_mainnet",0).edit().clear().commit()}
     @Test fun perOperationBiometricKeyInvalidatesWithEnrollmentOnAndroid28() {
         val spec=Crypto.keySpec()
         assertTrue(spec.isUserAuthenticationRequired);assertTrue(spec.isInvalidatedByBiometricEnrollment)
@@ -22,7 +22,8 @@ class SecurityRegressionTest {
         WalletStore.saveCards(c,setOf("A","B","C"));assertFalse(WalletStore.backupVerified(c))
         WalletStore.saveSecureCards(c,setOf("A","B"));assertThrows(IllegalStateException::class.java){WalletStore.verifyBackup(c)}
         WalletStore.saveSecureCards(c,setOf("A","B","C"));assertFalse(WalletStore.backupVerified(c))
-        WalletStore.verifyBackup(c);assertTrue(WalletStore.backupVerified(c))
+        WalletStore.verifyBackup(c);assertFalse(WalletStore.backupVerified(c))
+        listOf("A","B","C").forEach{WalletStore.markClean(c,it)};assertTrue(WalletStore.backupVerified(c))
         WalletStore.beginProvision(c);assertFalse(WalletStore.backupVerified(c))
     }
     @Test fun uncertainPaymentPersistsAndCannotBeReplacedByNewPayment() {

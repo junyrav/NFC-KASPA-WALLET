@@ -92,7 +92,7 @@ internal object KaspaTx {
         val pub=KaspaAddress.xOnlyPublicKey(privateKey)
         val owner=p2pkScript(pub)
         tx.inputs.forEach{ require(it.sigOpCount==1&&it.utxo.amount>0&&it.utxo.scriptVersion==0&&it.utxo.script.contentEquals(owner)){"현재 지갑의 UTXO가 아닙니다"} }
-        tx.outputs.forEach{require(it.amount>0){"출력 금액 오류"}}
+        tx.outputs.forEach{require(it.amount>0&&it.scriptVersion==0&&it.script.size==34&&it.script[0]==0x20.toByte()&&it.script[33]==0xac.toByte()&&KaspaAddress.isValidXOnlyPublicKey(it.script.copyOfRange(1,33))){"출력 주소 또는 금액 오류"}}
         val totalIn=tx.inputs.fold(0L){sum,i->Math.addExact(sum,i.utxo.amount)}
         val totalOut=tx.outputs.fold(0L){sum,o->Math.addExact(sum,o.amount)}
         require(totalIn>totalOut){"거래 금액 또는 수수료 오류"}

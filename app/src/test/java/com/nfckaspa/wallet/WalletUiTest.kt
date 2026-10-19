@@ -26,7 +26,7 @@ class WalletUiTest {
         val c=RuntimeEnvironment.getApplication()
         WalletStore.saveAddress(c,KaspaAddress.mainnet(KaspaAddress.newPrivateKey()))
         WalletStore.saveCards(c,setOf("A","B","C"))
-        WalletStore.saveSecureCards(c,setOf("A","B","C"));WalletStore.verifyBackup(c)
+        WalletStore.saveSecureCards(c,setOf("A","B","C"));WalletStore.verifyBackup(c);listOf("A","B","C").forEach{WalletStore.markClean(c,it)}
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             compose.onNodeWithText("내 지갑 잔액").assertIsDisplayed()
             compose.onNodeWithText("지갑 시작하기").assertDoesNotExist()

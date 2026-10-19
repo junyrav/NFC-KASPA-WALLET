@@ -58,6 +58,14 @@ object KaspaAddress {
         return payload.copyOfRange(1, 33)
     }
 
+    fun isValidXOnlyPublicKey(x:ByteArray):Boolean = x.size==32 && BigInteger(1,x)<curve.curve.field.characteristic && runCatching {
+        val point=curve.curve.decodePoint(byteArrayOf(2)+x).normalize()
+        !point.isInfinity && point.isValid
+    }.getOrDefault(false)
+    fun recipientPayload(address:String):ByteArray = mainnetPayload(address).also {
+        require(isValidXOnlyPublicKey(it)){"유효한 공개키가 아닌 주소입니다. 수신 주소를 다시 확인하세요"}
+    }
+
     private fun convert8to5(data: ByteArray): IntArray {
         var acc = 0; var bits = 0; val out = ArrayList<Int>()
         for (b in data) {

@@ -8,22 +8,22 @@ import org.json.JSONObject
 /** Mainnet version-0 P2PK transaction preparation. */
 internal object KaspaTransaction {
     private const val SOMPI = 100_000_000L
-    data class Prepared(val tx: KaspaTx.Tx, val fee: Long)
+    data class Prepared(val tx: KaspaTx.Tx, val fee: Long, val relayFloor:Boolean=false)
 
     suspend fun prepare(from:String,to:String,amountText:String):Prepared=withContext(Dispatchers.IO) {
-        KaspaAddress.mainnetPayload(from);KaspaAddress.mainnetPayload(to)
+        KaspaAddress.mainnetPayload(from);KaspaAddress.recipientPayload(to)
         build(from,to,kasToSompi(amountText),fetchUtxos(from),feeRate(),::mass)
     }
 
     suspend fun prepareMaximum(from:String,to:String):Prepared=withContext(Dispatchers.IO) {
-        KaspaAddress.mainnetPayload(from);KaspaAddress.mainnetPayload(to)
+        KaspaAddress.mainnetPayload(from);KaspaAddress.recipientPayload(to)
         build(from,to,null,fetchUtxos(from),feeRate(),::mass)
     }
 
     /** Re-price the actual outputs after subtracting the fee: KIP-9 storage mass depends on change. */
     internal fun build(from:String,to:String,amount:Long?,utxos:List<KaspaTx.Utxo>,rate:Double,massOf:(KaspaTx.Tx)->Long):Prepared {
         val owner=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(from))
-        val recipient=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(to))
+        val recipient=KaspaTx.p2pkScript(KaspaAddress.recipientPayload(to))
         require(amount==null||amount>0){"송금 수량은 0보다 커야 합니다"}
         FeePolicy.rate(rate)
         require(utxos.isNotEmpty()){ "사용 가능한 UTXO가 없습니다" }
@@ -41,10 +41,12 @@ internal object KaspaTransaction {
             val provisional=KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it,signatureScript=ByteArray(66))},outputs=outputs)
             val mass=massOf(provisional)
             require(mass in 1..100_000L){"소액 분할 또는 입력 개수로 네트워크 한도를 초과했습니다. 전액 입력을 선택하면 잔액 전체(수수료 제외)를 계산합니다. 부분 송금 수량은 자동으로 바꾸지 않습니다"}
-            val needed=java.math.BigDecimal.valueOf(rate).multiply(java.math.BigDecimal.valueOf(mass))
-                .setScale(0,java.math.RoundingMode.CEILING).longValueExact().coerceAtLeast(Math.multiplyExact(mass,FeePolicy.MIN_RATE.toLong()))
+            // At the relay floor use the node's admission mass (compute/transient), not priority storage pricing.
+            val pricingMass=if(rate==FeePolicy.MIN_RATE)minOf(mass,KaspaMass.parts(provisional).relay) else mass
+            val needed=java.math.BigDecimal.valueOf(rate).multiply(java.math.BigDecimal.valueOf(pricingMass))
+                .setScale(0,java.math.RoundingMode.CEILING).longValueExact().coerceAtLeast(Math.multiplyExact(pricingMass,FeePolicy.MIN_RATE.toLong()))
             FeePolicy.check(needed,outputs.first().amount,mass)
-            if(fee>=needed)return Prepared(KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it)},outputs=outputs),fee)
+            if(fee>=needed)return Prepared(KaspaTx.Tx(inputs=utxos.map{KaspaTx.Input(it)},outputs=outputs),fee,rate==FeePolicy.MIN_RATE)
             fee=needed
         }
         error("수수료 계산이 수렴하지 않았습니다. 다시 시도하세요")
@@ -76,7 +78,7 @@ internal object KaspaTransaction {
         return local.total
     }
     fun validateIntent(p:Prepared,from:String,to:String,amount:String) {
-        val recipient=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(to))
+        val recipient=KaspaTx.p2pkScript(KaspaAddress.recipientPayload(to))
         val owner=KaspaTx.p2pkScript(KaspaAddress.mainnetPayload(from))
         val tx=p.tx
         require(tx.version==0&&tx.outputs.size in 1..2&&tx.outputs[0].amount==kasToSompi(amount)&&tx.outputs[0].script.contentEquals(recipient)){"확인한 수신 주소 또는 금액과 실제 거래가 다릅니다"}
@@ -86,7 +88,7 @@ internal object KaspaTransaction {
         require(fee==p.fee){"확인한 수수료와 실제 거래가 다릅니다"}
         val mass=KaspaMass.calculate(tx);require(mass<=100_000)
         FeePolicy.check(fee,tx.outputs[0].amount,mass)
-        require(fee>=Math.multiplyExact(mass,FeePolicy.MIN_RATE.toLong())){"수수료가 네트워크 최소값보다 작습니다"}
+        require(fee>=Math.multiplyExact(KaspaMass.parts(tx).relay,FeePolicy.MIN_RATE.toLong())){"수수료가 네트워크 최소값보다 작습니다"}
     }
 
 

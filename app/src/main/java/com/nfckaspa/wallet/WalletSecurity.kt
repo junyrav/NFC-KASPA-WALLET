@@ -51,7 +51,7 @@ internal object Crypto {
         }
     }
     fun decryptCipher(rec:CardRecord):Cipher {
-        require(rec.version==2){"기존 카드는 카드 2장으로 복구 후 보안 카드로 재등록하세요"}
+        require(rec.version>=2){"기존 카드는 카드 2장으로 복구 후 보안 카드로 재등록하세요"}
         require(rec.daily.size==60)
         return Cipher.getInstance("AES/GCM/NoPadding").apply{init(Cipher.DECRYPT_MODE,dev(),GCMParameterSpec(128,rec.daily.copyOfRange(0,12)))}
     }
@@ -76,13 +76,13 @@ internal object Crypto {
     }
     fun passDec(rec:CardRecord,pass:CharArray):ByteArray {
         val b=rec.recovery;require(b.size==77){"복구 데이터 길이 오류"}
-        val key=if(rec.version==2)argonKey(pass,b.copyOfRange(0,16)) else {
+        val key=if(rec.version>=2)argonKey(pass,b.copyOfRange(0,16)) else {
             val spec=PBEKeySpec(pass,b.copyOfRange(0,16),120000,256)
             val bytes=try{SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded}finally{spec.clearPassword()}
             try{SecretKeySpec(bytes,"AES")}finally{bytes.fill(0)}
         }
         val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,key,GCMParameterSpec(128,b.copyOfRange(16,28)))
-        if(rec.version==2)cipher.updateAAD(rec.header())
+        if(rec.version>=2)cipher.updateAAD(rec.header())
         return cipher.doFinal(b.copyOfRange(28,b.size))
     }
     fun sha(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes)

@@ -2,7 +2,7 @@ package com.nfckaspa.wallet
 
 /** Kaspa v0 P2PK mass; integer KIP-9 storage, compute and normalized transient components. */
 internal object KaspaMass {
-    data class Parts(val compute:Long,val storage:Long,val transient:Long){val total get()=maxOf(compute,storage,transient)}
+    data class Parts(val compute:Long,val storage:Long,val transient:Long){val total get()=maxOf(compute,storage,transient);val relay get()=maxOf(compute,transient)}
     fun parts(tx:KaspaTx.Tx):Parts {
         require(tx.version==0&&tx.inputs.isNotEmpty()&&tx.outputs.isNotEmpty())
         require(tx.inputs.all{it.utxo.amount>0&&it.utxo.script.size==34&&it.utxo.scriptVersion==0&&it.sigOpCount==1})
