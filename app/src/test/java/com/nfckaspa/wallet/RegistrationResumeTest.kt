@@ -41,4 +41,9 @@ class RegistrationResumeTest {
         val restored=RegistrationResume.restore(rec,key,share,gen,setOf("A"),false,address,"A")
         assertArrayEquals(key,Shares.join(restored.getValue(Slot.A),restored.getValue(Slot.B)))
     }
+    @Test fun verificationRequiresBothCurrentGenerationCardsAndThreeRegistrations() {
+        assertNotNull(BackupVerification.incompleteReason(setOf("A"),setOf(Slot.A,Slot.B)))
+        assertNotNull(BackupVerification.incompleteReason(setOf("A","B","C"),setOf(Slot.A)))
+        assertNull(BackupVerification.incompleteReason(setOf("A","B","C"),setOf(Slot.A,Slot.C)))
+    }
 }

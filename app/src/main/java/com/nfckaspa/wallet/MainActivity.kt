@@ -462,10 +462,14 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 try {
                                     RecoveryIdentity.validate(recovered,expected,recoveryPub)
                                     saveWallet(recovered);shares.values.forEach{it.fill(0)};shares=Shares.restore(two[0],two[1])
-                                    if(cardMarks.size==3&&foundSecure.size==2){WalletStore.verifyBackup(context);recoveryVerified=true;backupVerified=WalletStore.backupVerified(context)}
+                                    val incomplete=BackupVerification.incompleteReason(cardMarks,foundSecure)
+                                    if(incomplete==null){WalletStore.verifyBackup(context);recoveryVerified=true;backupVerified=WalletStore.backupVerified(context)}
                                     found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null
-                                    if(!keepRecoveryKey&&recoveryVerified){lockSecrets();status="현재 세대 복구 검증 완료 ✓ · 새 비밀번호를 입력하고 카드 3장의 이전 영역을 정리하세요"}
-                                    else status="복구 완료 · 보안 카드 등록용 새 비밀번호와 재입력을 확인하세요"
+                                    when {
+                                        incomplete!=null->status="키 복구는 성공했지만 이번 백업 검증은 미완료 · $incomplete"
+                                        backupVerified->{lockSecrets();status="복구 검증 완료 ✓ · 카드 3장의 이전 영역 정리까지 완료된 상태입니다"}
+                                        else->{if(!keepRecoveryKey)lockSecrets();status="복구 검증 완료 ✓ · 마지막 단계: 새 비밀번호를 입력하고 '이전 데이터 정리'에서 A/B/C를 태그하세요"}
+                                    }
                                     refresh()
                                 } finally {recovered.fill(0)}
                             }
