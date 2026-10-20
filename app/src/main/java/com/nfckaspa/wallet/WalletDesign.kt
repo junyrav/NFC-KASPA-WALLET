@@ -376,7 +376,7 @@ private fun total(s:WalletVisualState):String = runCatching {
             Text("새 카드용 비밀번호는 3장 등록을 마칠 때까지 유지됩니다.",fontSize=12.sp,color=Muted)
             if(!s.passwordFrozen) {
             TextButton(onClick=a.generatePassword,enabled=!s.busy){Text("강한 비밀번호 생성")}
-            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(s.newPassword,a.newPassword,label={Text("A/B/C 공통 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(s.newPasswordConfirm,a.newPasswordConfirm,label={Text("새 카드용 비밀번호 재입력")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             } else Text("현재 등록에 설정한 비밀번호를 사용 중입니다.",fontSize=12.sp,color=Muted)
             TextButton(onClick={a.setting("locknow")}){Text("지금 잠그기")}
@@ -404,7 +404,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     WhiteCard {
         Text(if(s.unlocked)"NFC 카드 등록 / 교체" else "등록 잠금 해제",fontSize=18.sp,fontWeight=FontWeight.Bold,color=Ink)
         if(!s.unlocked) {
-            Text("카드마다 해당 비밀번호를 입력하고 태그하세요. 이전 세대 카드도 복구는 가능하지만 현재 세대 검증과 정리는 별도로 필요합니다.",fontSize=13.sp,color=Muted)
+            Text("A/B/C는 공통 비밀번호를 사용합니다. 한 번 입력하고 서로 다른 카드를 차례로 태그하세요. 완료·취소·앱을 벗어나면 입력을 지웁니다. 기존 카드의 비밀번호가 다르면 해당 카드에 맞게 변경하세요.",fontSize=13.sp,color=Muted)
             OutlinedTextField(s.password,a.password,label={Text("복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp))
             if(s.resumeAvailable) {
                 Text("처음 등록이 중단되었다면 같은 휴대폰에서 등록한 카드 1장·등록 비밀번호·지문 인증으로 이어갈 수 있습니다. 앱 삭제나 다른 휴대폰에서의 1장 복구는 지원하지 않습니다.",fontSize=12.sp,color=Muted)
@@ -417,7 +417,7 @@ private fun total(s:WalletVisualState):String = runCatching {
             Text("새 카드용 비밀번호는 3장 등록을 마칠 때까지 유지됩니다.",fontSize=12.sp,color=Muted)
             if(!s.passwordFrozen) {
             TextButton(onClick=a.generatePassword,enabled=!s.busy){Text("강한 비밀번호 생성")}
-            OutlinedTextField(s.newPassword,a.newPassword,label={Text("새 카드용 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(s.newPassword,a.newPassword,label={Text("A/B/C 공통 복구 비밀번호 · 8자 이상")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(s.newPasswordConfirm,a.newPasswordConfirm,label={Text("새 카드용 비밀번호 재입력")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),singleLine=true,enabled=!s.passwordFrozen&&!s.busy,modifier=Modifier.fillMaxWidth())
             } else Text("현재 등록에 설정한 비밀번호를 사용 중입니다.",fontSize=12.sp,color=Muted)
             TextButton(onClick={a.setting("locknow")}){Text("지금 잠그기")}

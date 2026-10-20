@@ -263,7 +263,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         lockSecrets();status="작업을 취소하고 비밀 정보를 잠갔습니다"
     }
     fun prepareCard(slot:Slot) {
-        if(secret==null){status="카드 2장과 각 카드의 비밀번호로 먼저 잠금을 해제하세요";return}
+        if(secret==null){status="카드 2장과 공통 비밀번호로 먼저 잠금을 해제하세요";return}
         if(provisioningPass==null) {
             if(!PasswordPolicy.valid(newPass)||newPass!=newPassConfirm){status="새 복구 비밀번호와 재입력을 확인하세요";return}
             if(WalletStore.generation(context).isBlank()||WalletStore.recoveryVerified(context)||(cardMarks.size==3&&WalletStore.cleanupRound(context).isBlank())) {
@@ -454,8 +454,8 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                             val mixed=foundGeneration!=null&&foundGeneration!=generation
                             if(foundGeneration==null)foundGeneration=generation
                             if(rec.version==3&&generation==WalletStore.generation(context))foundSecure=foundSecure+rec.slot
-                            pass=""
-                            status="CARD ${rec.slot.name} 확인 · ${found.size}/${if(verifyAllCards)3 else 2} · 다음 카드의 비밀번호를 입력하세요"+(if(mixed)" · 등록 세대가 다릅니다. 복구는 가능하지만 백업 검증은 완료되지 않습니다" else "")
+                            // Reuse the common password only within this foreground recovery session.
+                            status="CARD ${rec.slot.name} 확인 · ${found.size}/${if(verifyAllCards)3 else 2} · 같은 비밀번호로 다음 카드를 태그하세요"+(if(mixed)" · 등록 세대가 다릅니다. 복구는 가능하지만 백업 검증은 완료되지 않습니다" else "")
                             if(found.size>=(if(verifyAllCards)3 else 2)) {
                                 val triple=verifyAllCards
                                 if(triple)ThreeCardVerification.validate(found,expected,recoveryPub)
@@ -465,7 +465,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                     saveWallet(recovered);shares.values.forEach{it.fill(0)};shares=Shares.restore(two[0],two[1])
                                     val incomplete=if(triple&&cardMarks==setOf("A","B","C")&&foundSecure==Slot.entries.toSet())null else "등록 완료 판정은 현재 세대 A/B/C 세 장 검증이 필요합니다"
                                     if(incomplete==null){WalletStore.verifyBackup(context);recoveryVerified=true;cleanedCards=WalletStore.cleanedCards(context);backupVerified=WalletStore.backupVerified(context)}
-                                    found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null
+                                    found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null;pass=""
                                     when {
                                         !triple->status="카드 2장으로 지갑 복구 완료 · 등록 완료 검증은 A/B/C 세 장으로 진행하세요"
                                         incomplete!=null->status="지갑 복구 성공 · 등록 검증은 미완료 · $incomplete"
@@ -478,7 +478,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                         } finally {sh.fill(0)}
                     }
                 } catch(e:Exception){
-                    val invalidPair=recoveryMode&&found.size>=2
+                    val invalidPair=recoveryMode&&found.size>=(if(verifyAllCards)3 else 2)
                     if(invalidPair)lockSecrets() // Do not retain a failed pair that would prevent replacing either card.
                     status="처리 실패 · ${e.message?:"카드와 비밀번호를 확인하세요"}"+(if(invalidPair)" · 두 카드 확인을 초기화했습니다. 비밀번호를 입력하고 복구 검증을 다시 시작하세요" else "")
                 }
