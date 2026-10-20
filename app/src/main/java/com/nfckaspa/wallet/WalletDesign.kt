@@ -245,9 +245,9 @@ private fun total(s:WalletVisualState):String = runCatching {
         }
     }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        listOf(Triple("보내기",Icons.Outlined.NorthEast,{a.route("Send")}),Triple("받기",Icons.Outlined.South,{a.route("Receive")}),Triple("QR 스캔",Icons.Outlined.QrCodeScanner,a.scan),Triple("거래내역",Icons.Outlined.ReceiptLong,{a.navigate("Transactions")})).forEachIndexed { i,(label,icon,click) ->
+        listOf(Triple("보내기",Icons.Outlined.NorthEast,{a.route("Send")}),Triple("받기",Icons.Outlined.South,{a.route("Receive")}),Triple("QR 스캔",Icons.Outlined.QrCodeScanner,a.scan),Triple("거래내역",Icons.Outlined.ReceiptLong,{a.navigate("Transactions")})).forEach { (label,icon,click) ->
             val enabled=i==3||(s.cards.size==3&&s.backupVerified)
-            Column(Modifier.weight(1f).height(84.dp).background(Brush.linearGradient(if(i==1)listOf(Color(0xFF08BF9D),Teal) else listOf(Color(0xFF169F93),Deep)),RoundedCornerShape(16.dp)).clickable(enabled=enabled,onClick=click).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
+            Column(Modifier.weight(1f).height(84.dp).background(Brush.linearGradient(listOf(Color(0xFF169F93),Deep)),RoundedCornerShape(16.dp)).clickable(enabled=enabled,onClick=click).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
                 Icon(icon,label,Modifier.size(25.dp),tint=if(enabled)Color.White else Color.White.copy(alpha=.4f))
                 Text(label,color=if(enabled)Color.White else Color.White.copy(alpha=.4f),fontSize=12.sp)
             }

@@ -198,7 +198,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             else {sendTo=parsed;prepared=null;displayedFee=null;sendAll=false;inputRevision++;tab="Wallet";page="Send";sendInfo="주소 형식·체크섬·공개키를 확인하세요"}
         }
     }
-    fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa 메인넷 주소 QR을 스캔하세요").setBeepEnabled(false).setOrientationLocked(false))}
+    fun launchScan(){scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Kaspa 메인넷 주소 QR을 스캔하세요").setBeepEnabled(false).setCaptureActivity(QrCaptureActivity::class.java).setOrientationLocked(true))}
 
     var historyLoading by remember { mutableStateOf(false) }
     var historyError by remember { mutableStateOf("") }
@@ -278,6 +278,14 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         }
         pendingCard=null;pendingUid="";pendingSnapshot=null;overwritePermit=null;target=slot
         status="${slot.name} 카드를 태그해 내용을 확인한 뒤 생체인증하세요. 준비 후 같은 카드를 다시 태그합니다"
+    }
+    fun requestOverwrite(snapshot:CardSnapshot,rec:CardRecord,id:String) {
+        overwritePermit=null
+        overwritePrompt=OverwritePermit(id,Crypto.sha(snapshot.bytes),rec.slot,android.os.SystemClock.elapsedRealtime(),Crypto.sha(rec.encode()))
+        val old=snapshot.latest
+        val oldWallet=if(old?.pub?.size==32)KaspaAddress.fromPublicKey(old.pub) else "지갑을 식별할 수 없는 기존 데이터"
+        overwriteDescription="기존 등록: ${old?.slot?.name?:"알 수 없음"} 카드\n$oldWallet\n\n새 등록: 현재 지갑의 ${rec.slot.name} 카드\n\n계속하면 이 카드의 지갑 데이터 영역을 먼저 모두 지운 뒤 새 데이터를 저장합니다. 삭제 후 태그가 끊기거나 저장에 실패하면 이 카드의 기존 데이터는 복구할 수 없습니다. 다른 슬롯을 덮어쓰면 복구에 필요한 카드 수가 부족해질 수 있습니다. 나머지 두 카드와 비밀번호로 기존 지갑을 복구할 수 있는지 확인하세요."
+        overwriteAccepted=false
     }
     fun preflight() {
         if(WalletStore.pending(context)!=null){sendInfo="제출 결과 확인이 필요한 거래가 있습니다. 거래내역에서 기존 거래를 재확인하세요";return}
@@ -360,7 +368,10 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                         val encrypted=try{withContext(Dispatchers.Default){Crypto.passEnc(shares.getValue(writeSlot),pw,rec.header())}}finally{pw.fill('\u0000')}
                                         check(epoch==sessionEpoch)
                                         pendingCard=rec.copy(daily=daily,recovery=encrypted);pendingUid=id;pendingSnapshot=Crypto.sha(snapshot.bytes)
-                                        status="준비 완료 · 같은 ${writeSlot.name} 카드를 다시 태그해 저장을 진행하세요"
+                                        if(snapshot.occupied) {
+                                            requestOverwrite(snapshot,pendingCard!!,id)
+                                            status="기존 데이터를 확인했습니다 · 덮어쓰기를 승인한 뒤 같은 카드를 태그하세요"
+                                        } else status="빈 카드 확인 및 인증 완료 · 같은 ${writeSlot.name} 카드를 다시 태그해 저장하세요"
                                     }catch(e:Exception){status="카드 준비 실패 · ${e.message}"}
                                     finally{cardPreparing=false}
                                 }
@@ -371,11 +382,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                         if(id!=pendingUid||pendingSnapshot?.contentEquals(Crypto.sha(snapshot.bytes))!=true){pendingCard=null;pendingUid="";pendingSnapshot=null;overwritePermit=null;error("카드 또는 내용이 바뀌었습니다. 등록할 카드를 다시 태그해 준비하세요")}
                         val permit=overwritePermit
                         if(snapshot.occupied&&(permit==null||!permit.matches(id,snapshot.bytes,writeSlot,android.os.SystemClock.elapsedRealtime(),rec.encode()))) {
-                            overwritePermit=null
-                            overwritePrompt=OverwritePermit(id,Crypto.sha(snapshot.bytes),writeSlot,android.os.SystemClock.elapsedRealtime(),Crypto.sha(rec.encode()))
-                            val old=snapshot.latest
-                            val oldWallet=if(old?.pub?.size==32)KaspaAddress.fromPublicKey(old.pub) else "지갑을 식별할 수 없는 기존 데이터"
-                            overwriteDescription="기존 등록: ${old?.slot?.name?:"알 수 없음"} 카드\n$oldWallet\n\n새 등록: 현재 지갑의 ${writeSlot.name} 카드\n\n계속하면 이 카드의 지갑 데이터 영역을 먼저 모두 지운 뒤 새 데이터를 저장합니다. 삭제 후 태그가 끊기거나 저장에 실패하면 이 카드의 기존 데이터는 복구할 수 없습니다. 다른 슬롯을 덮어쓰면 복구에 필요한 카드 수가 부족해질 수 있습니다. 나머지 두 카드와 비밀번호로 기존 지갑을 복구할 수 있는지 확인하세요."
+                            requestOverwrite(snapshot,rec,id)
                             overwriteAccepted=false;busy=false;return@launch
                         }
                         overwritePermit=null // one attempt only; failures require another explicit approval.
@@ -501,7 +508,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         confirmButton={TextButton(onClick={showGenerated=false}){Text("기록했습니다")}})
     if(overwritePrompt!=null)OverwriteConsentDialog(overwriteDescription,overwriteAccepted,{overwriteAccepted=it},
         onContinue={overwritePermit=overwritePrompt!!.copy(created=android.os.SystemClock.elapsedRealtime());overwritePrompt=null;status="덮어쓰기를 승인했습니다. 같은 카드를 다시 태그하세요"},
-        onCancel={overwritePrompt=null;overwritePermit=null;target=null;pendingCard=null;status="카드 저장을 취소했습니다"})
+        onCancel={overwritePrompt=null;overwritePermit=null;target=null;pendingCard?.daily?.fill(0);pendingCard?.recovery?.fill(0);pendingCard=null;pendingUid="";pendingSnapshot=null;status="카드 저장을 취소했습니다"})
 
 
 
