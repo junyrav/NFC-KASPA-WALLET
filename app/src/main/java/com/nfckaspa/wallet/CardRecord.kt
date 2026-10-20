@@ -68,6 +68,23 @@ internal object CardJournal {
     }
 }
 
+/** Destructive replacement after UID/snapshot-bound overwrite consent. Old card data is not retained. */
+internal object CardRegistration {
+    fun replace(snapshot:CardSnapshot,record:CardRecord,write:(Int,Int,ByteArray)->Unit,read:(Int)->ByteArray):CardSnapshot {
+        require(record.version==3&&record.sequence>(snapshot.latest?.sequence?:0L))
+        record.encode() // Validate the complete prepared record before deleting anything.
+        for(bank in 0..1)write(bank,0,ByteArray(16))
+        for(bank in 0..1)for(block in 1 until 18)write(bank,block,ByteArray(16))
+        val empty=CardSnapshot(read(0),read(1))
+        check(empty.first.size==288&&empty.second.size==288&&empty.bytes.all{it==0.toByte()}){"기존 지갑 영역 초기화 검증 실패 · 새 데이터를 저장하지 않았습니다"}
+        CardJournal.commit(empty,record,write,read)
+        val after=CardSnapshot(read(0),read(1))
+        check(after.latest?.encode()?.contentEquals(record.encode())==true&&listOf(after.first,after.second)[1-after.activeBank()].size==288&&
+            listOf(after.first,after.second)[1-after.activeBank()].all{it==0.toByte()}){"새 등록 데이터 또는 빈 영역 검증 실패"}
+        return after
+    }
+}
+
 /** Only an authenticated, currently verified generation can authorize deletion of the inactive bank. */
 internal object CardCleanup {
     fun erase(snapshot:CardSnapshot,record:CardRecord,write:(Int,Int,ByteArray)->Unit,read:(Int)->ByteArray):CardSnapshot {

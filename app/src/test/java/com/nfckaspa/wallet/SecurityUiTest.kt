@@ -55,9 +55,9 @@ class SecurityUiTest {
         compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(password="Kasp8!xy",passwordConfirm="Kasp8!xy"),DesignActions())}}
         compose.onNodeWithText("새 메인넷 지갑 생성").assertIsEnabled()
     }
-    @Test fun verifiedPairIsShownAsCompleteEvenWhileCleanupIsPending() {
+    @Test fun legacyCardsRequireReregistrationRatherThanASeparateCleanupButton() {
         compose.setContent{KaspaWalletTheme{WalletDesign(WalletVisualState(address=KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1}),tab="Cards",cards=setOf("A","B","C"),password="Kasp8!xy",recoveryVerified=true),DesignActions())}}
-        compose.onNodeWithText("복구 검증 완료 · 이전 영역 정리 0/3").assertExists()
-        compose.onNodeWithText("이전 데이터 정리").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("카드 3장 검증 완료 · 새 등록 방식 확인 0/3").assertExists()
+        compose.onNodeWithText("이전 데이터 정리").assertDoesNotExist()
     }
 }

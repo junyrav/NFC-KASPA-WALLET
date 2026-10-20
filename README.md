@@ -1,4 +1,4 @@
-# Kaspa NFC Wallet · v0.11.2 Mainnet
+# Kaspa NFC Wallet · v0.12.0 Mainnet
 
 Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name are **Kaspa NFC Wallet**.
 
@@ -22,7 +22,7 @@ Android/Kotlin NFC wallet for Kaspa mainnet. The launcher label and in-app name 
 - Sending requires one wallet card and strong biometric authentication after confirming the destination, amount and fee.
 
 ## Cards and recovery
-- Register three distinct MIFARE Classic cards. Three V3 registrations, a two-card recovery check and verified inactive-bank cleanup on all three cards are required for Send/Receive.
+- Register three distinct MIFARE Classic cards. Each registration erases both wallet data banks after overwrite consent, writes the new V3 record and verifies both banks. Three distinct registered cards and an all-three-card verification (checking every two-card combination) are required for Send/Receive; there is no separate cleanup step.
 - Recovery uses two different slots and the recovery password, preserving the original Shamir sharing polynomial and compatibility with untouched cards.
 - NFC I/O retries up to five times. Writes are read back and compared before registration succeeds.
 - Preferences contain public addresses, card metadata and transfer records only. Private keys, plaintext recovery shares and passwords are not persisted there.

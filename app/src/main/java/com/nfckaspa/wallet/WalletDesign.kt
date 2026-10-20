@@ -61,13 +61,13 @@ internal data class WalletVisualState(
     val busy:Boolean=false,val refreshing:Boolean=false,val awaiting:Boolean=false,val recovery:Boolean=false,
     val target:String?=null,val unlocked:Boolean=false,val captureAllowed:Boolean=false,val password:String="",val currency:String="KRW",
     val passwordConfirm:String="",val newPassword:String="",val newPasswordConfirm:String="",val passwordFrozen:Boolean=false,
-    val recoveryAddress:String="",val backupVerified:Boolean=false,val recoveryVerified:Boolean=false,val cleaning:Boolean=false,val resumeAvailable:Boolean=false,val resumingRegistration:Boolean=false,val cleanedCards:Set<String> = emptySet(),val addressValid:Boolean=false,val relayFloor:Boolean=false,val pending:Boolean=false,val confirmationOpen:Boolean=false,
+    val recoveryAddress:String="",val verifyAllCards:Boolean=false,val backupVerified:Boolean=false,val recoveryVerified:Boolean=false,val cleaning:Boolean=false,val resumeAvailable:Boolean=false,val resumingRegistration:Boolean=false,val cleanedCards:Set<String> = emptySet(),val addressValid:Boolean=false,val relayFloor:Boolean=false,val pending:Boolean=false,val confirmationOpen:Boolean=false,
     val krw:Double?=null,val usd:Double?=null,val change:Double?=null
 )
 internal fun backupStageText(s:WalletVisualState)=when {
-    s.backupVerified->"등록 · 복구 검증 · 이전 영역 정리 완료"
-    s.recoveryVerified->"복구 검증 완료 · 이전 영역 정리 ${s.cleanedCards.size}/3"
-    s.cards.size==3->"카드 등록 3/3 완료 · 2장 복구 검증 대기"
+    s.backupVerified->"등록 시 초기화 · 카드 3장 검증 완료"
+    s.recoveryVerified->"카드 3장 검증 완료 · 새 등록 방식 확인 ${s.cleanedCards.size}/3"
+    s.cards.size==3->"카드 등록 3/3 완료 · 카드 3장 검증 대기"
     else->"카드 등록 ${s.cards.size}/3 · 등록을 먼저 완료하세요"
 }
 internal data class DesignActions(
@@ -156,7 +156,7 @@ private fun total(s:WalletVisualState):String = runCatching {
     val home=s.address.isNotBlank()&&s.tab=="Wallet"&&s.page.isBlank()
     if(!s.confirmationOpen&&(s.awaiting||s.recovery||s.target!=null||s.cleaning||s.resumingRegistration))AlertDialog(
         onDismissRequest={if(!s.busy)a.cancel()},
-        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)"2-of-3 지갑 복구" else if(s.resumingRegistration)"중단된 카드 등록 이어가기" else if(s.cleaning)"이전 카드 데이터 정리" else "NFC 카드 인증")},
+        title={Text(if(s.target!=null)"${s.target} 카드 등록" else if(s.recovery)if(s.verifyAllCards)"A/B/C 등록 카드 3장 검증" else "2-of-3 지갑 복구" else if(s.resumingRegistration)"중단된 카드 등록 이어가기" else if(s.cleaning)"이전 카드 데이터 정리" else "NFC 카드 인증")},
         text={Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Icon(Icons.Outlined.Nfc,null,Modifier.size(52.dp),tint=Teal)
             Text(s.status,fontSize=14.sp)
@@ -253,7 +253,7 @@ private fun total(s:WalletVisualState):String = runCatching {
             }
         }
     }
-    if(!s.backupVerified)Hint(backupStageText(s),if(s.recoveryVerified)"2장 복구 검증은 끝났습니다. 카드관리의 이전 데이터 정리에서 A/B/C를 태그하면 완료됩니다." else "카드관리에서 등록과 복구 검증을 마친 뒤 입금하세요.")
+    if(!s.backupVerified)Hint(backupStageText(s),if(s.recoveryVerified)"카드 3장 복구 조합 검증은 끝났습니다. 기존 방식으로 등록한 카드는 카드관리에서 A/B/C를 새 방식으로 재등록하세요." else "카드관리에서 등록과 복구 검증을 마친 뒤 입금하세요.")
     WhiteCard {
         Text("내 주소 (kaspa)",fontWeight=FontWeight.SemiBold,fontSize=13.sp,color=Ink)
         Row(Modifier.fillMaxWidth().background(Color(0xFFF6FAF9),RoundedCornerShape(8.dp)),verticalAlignment=Alignment.CenterVertically){Text(shortKaspaAddress(s.address),Modifier.weight(1f).padding(start=8.dp),fontSize=13.sp,maxLines=1);IconButton(onClick={a.copy(s.address)}){Icon(Icons.Outlined.ContentCopy,"주소 복사",Modifier.size(19.dp),tint=Ink)};IconButton(onClick={a.route("Receive")}){Icon(Icons.Outlined.QrCode2,"수신 QR 보기",Modifier.size(22.dp),tint=Ink)}}
@@ -410,8 +410,8 @@ private fun total(s:WalletVisualState):String = runCatching {
                 Text("처음 등록이 중단되었다면 같은 휴대폰에서 등록한 카드 1장·등록 비밀번호·지문 인증으로 이어갈 수 있습니다. 앱 삭제나 다른 휴대폰에서의 1장 복구는 지원하지 않습니다.",fontSize=12.sp,color=Muted)
                 Primary("등록한 카드로 이어서 등록",a.resumeRegistration,s.password.length>=8&&!s.busy&&!s.recovery&&!s.resumingRegistration)
             }
-            Primary(if(s.backupVerified)"카드 2장으로 복구 재검증" else "카드 2장으로 복구 검증",a.recover,s.password.length>=8&&!s.busy&&!s.recovery)
-            OutlinedButton(onClick=a.unlock,enabled=s.password.length>=8&&!s.busy&&!s.recovery){Text("카드 등록·교체를 위해 잠금 해제")}
+            Primary(if(s.cards.size==3)"등록 카드 3장 검증" else "카드 2장으로 지갑 복구",a.recover,s.password.length>=8&&!s.busy&&!s.recovery)
+            OutlinedButton(onClick=a.unlock,enabled=s.password.length>=8&&!s.busy&&!s.recovery){Text("카드 등록·교체를 위해 2장으로 잠금 해제")}
         }
         if(s.unlocked) {
             Text("새 카드용 비밀번호는 3장 등록을 마칠 때까지 유지됩니다.",fontSize=12.sp,color=Muted)
@@ -426,16 +426,14 @@ private fun total(s:WalletVisualState):String = runCatching {
         Slot.entries.forEach {slot->
             Row(Modifier.fillMaxWidth().border(1.dp,Line,RoundedCornerShape(12.dp)).padding(13.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Outlined.CreditCard,null,tint=Teal,modifier=Modifier.size(28.dp))
-                Column(Modifier.weight(1f)){Text("${slot.name} 카드",fontWeight=FontWeight.SemiBold,color=Ink);Text(if(slot.name in s.cards)"등록됨 · ${s.dates[slot.name]?:"등록 확인"}" else "미등록",fontSize=11.sp,color=Muted);if(s.recoveryVerified)Text(if(slot.name in s.cleanedCards)"이전 영역 정리: 확인됨" else "이전 영역 정리: 미확인",fontSize=11.sp,color=if(slot.name in s.cleanedCards)Teal else Muted)}
+                Column(Modifier.weight(1f)){Text("${slot.name} 카드",fontWeight=FontWeight.SemiBold,color=Ink);Text(if(slot.name in s.cards)"등록됨 · ${s.dates[slot.name]?:"등록 확인"}" else "미등록",fontSize=11.sp,color=Muted);if(s.recoveryVerified)Text(if(slot.name in s.cleanedCards)"등록 시 초기화: 확인됨" else "등록 시 초기화: 미확인",fontSize=11.sp,color=if(slot.name in s.cleanedCards)Teal else Muted)}
                 OutlinedButton(onClick={a.register(slot)},enabled=s.unlocked&&!s.busy&&!s.recovery&&s.target==null,contentPadding=PaddingValues(horizontal=12.dp)){Text(if(slot.name in s.cards)"재등록" else "등록",fontSize=12.sp)}
             }
         }
         if(s.unlocked)TextButton(onClick=a.restartProvision,enabled=!s.busy&&s.target==null){Text("등록 세대를 새로 시작")}
-        if(s.recoveryVerified&&!s.backupVerified){
-            Text("마지막 단계 · 이전 데이터 정리 ${s.cleanedCards.size}/3",color=Teal)
-            Text("두 장 복구 검증은 완료되었습니다. 아래에 새 복구 비밀번호를 입력하고 정리를 시작한 뒤 A/B/C를 태그하세요. 현재 데이터는 보존합니다.",fontSize=12.sp,color=Muted)
-            if(s.unlocked)OutlinedTextField(s.password,a.password,label={Text("정리할 카드의 새 복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),singleLine=true,enabled=!s.busy,modifier=Modifier.fillMaxWidth())
-            Primary("이전 데이터 정리",a.cleanup,s.password.isNotBlank()&&!s.busy&&!s.recovery&&!s.cleaning)
+        if(s.recoveryVerified&&!s.backupVerified) {
+            Text("새 등록 방식 확인 ${s.cleanedCards.size}/3",color=Teal)
+            Text("기존 방식의 카드는 두 장으로 잠금을 해제한 뒤 A/B/C를 재등록하세요. 등록할 때 경고 동의 후 기존 지갑 영역을 초기화하고 새 데이터를 저장·검증합니다. 별도 정리 단계는 없습니다.",fontSize=12.sp,color=Muted)
         }
         Text("등록 이력은 이 기기에서 확인한 기준입니다.",fontSize=11.sp,color=Muted)
     }

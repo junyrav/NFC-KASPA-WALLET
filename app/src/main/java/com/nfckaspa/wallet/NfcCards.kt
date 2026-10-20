@@ -24,7 +24,7 @@ internal object NfcCards {
         val snapshot=CardSnapshot(bank(m,0),bank(m,1))
         check(java.security.MessageDigest.isEqual(Crypto.sha(snapshot.bytes),expected)){"확인한 뒤 카드 데이터가 바뀌었습니다. 다시 확인하세요"}
         check(record.sequence>(snapshot.latest?.sequence?:0)){"카드 순서가 변경되었습니다. 다시 준비하세요"}
-        CardJournal.commit(snapshot,record,{ bank,index,bytes->
+        CardRegistration.replace(snapshot,record,{ bank,index,bytes->
             val sector=1+bank*6+index/3
             auth(m,sector);m.writeBlock(m.sectorToBlock(sector)+index%3,bytes)
         },{bank->bank(m,bank)})

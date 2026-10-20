@@ -140,6 +140,8 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     var shares by remember { mutableStateOf<Map<Slot,ByteArray>>(emptyMap()) }
     var found by remember { mutableStateOf<Map<Slot,ByteArray>>(emptyMap()) }
     var recoveryMode by remember { mutableStateOf(false) }
+    var verifyAllCards by remember { mutableStateOf(false) }
+    var foundUids by remember { mutableStateOf<Set<String>>(emptySet()) }
     var target by remember { mutableStateOf<Slot?>(null) }
     var pendingCard by remember { mutableStateOf<CardRecord?>(null) }
     var pendingUid by remember { mutableStateOf("") }
@@ -245,6 +247,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
     }
     fun lockSecrets() {
         sessionEpoch++
+        verifyAllCards=false;foundUids=emptySet()
         pendingUid="";pendingSnapshot=null;checkingSession=false;cardPreparing=false;cleaning=false;resumingRegistration=false;foundGeneration=null
         secret?.fill(0);secret=null;shares.values.forEach{it.fill(0)};shares=emptyMap()
         found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null
@@ -263,7 +266,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         if(secret==null){status="카드 2장과 각 카드의 비밀번호로 먼저 잠금을 해제하세요";return}
         if(provisioningPass==null) {
             if(!PasswordPolicy.valid(newPass)||newPass!=newPassConfirm){status="새 복구 비밀번호와 재입력을 확인하세요";return}
-            if(WalletStore.generation(context).isBlank()||WalletStore.recoveryVerified(context)) {
+            if(WalletStore.generation(context).isBlank()||WalletStore.recoveryVerified(context)||(cardMarks.size==3&&WalletStore.cleanupRound(context).isBlank())) {
                 WalletStore.beginProvision(context);cardMarks=emptySet();backupVerified=false;recoveryVerified=false;cleanedCards=emptySet()
             }
             if(cardMarks.isNotEmpty()) {
@@ -327,7 +330,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                     WalletStore.bindCard(context,id,rec.slot.name);WalletStore.saveCards(context,marks);WalletStore.saveSecureCards(context,marks)
                                     saveWallet(dailyKey);shares.values.forEach{it.fill(0)};shares=restored;restored=emptyMap()
                                     provisioningPass?.fill('\u0000');provisioningPass=pw.copyOf()
-                                    cardMarks=marks;backupVerified=false;recoveryVerified=false;cleanedCards=emptySet();resumingRegistration=false
+                                    cardMarks=marks;backupVerified=false;recoveryVerified=false;cleanedCards=WalletStore.cleanedCards(context);resumingRegistration=false
                                     status="${rec.slot.name} 카드 인증 완료 · 같은 비밀번호로 미등록 카드를 이어서 등록하세요"
                                 }catch(e:Exception){status="처리 실패 · 등록 재개 실패: ${e.message}. 비밀번호를 다시 입력하거나 대기를 취소하세요"}
                                 finally{key?.fill(0);share?.fill(0);pw.fill('\u0000');restored.values.forEach{it.fill(0)};busy=false}
@@ -335,21 +338,6 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                         }
                         releaseBusy=false
                         return@launch
-                    } else if(cleaning) {
-                        check(WalletStore.recoveryVerified(context)){"현재 세대 카드 2장으로 먼저 복구 검증하세요"}
-                        val rec=snapshot.latest?:error("등록 기록이 없습니다")
-                        check(rec.version==3&&rec.generation.hex()==WalletStore.generation(context)&&rec.pub.contentEquals(KaspaAddress.mainnetPayload(address))&&WalletStore.cardOwner(context,id)==rec.slot.name){"이번 세대에 등록한 원래 카드를 태그하세요"}
-                        val remaining=(setOf("A","B","C")-WalletStore.cleanedCards(context)).sorted().joinToString(" / ")
-                        if(rec.slot.name in WalletStore.cleanedCards(context)){status="${rec.slot.name} 카드는 이미 정리 확인됨 · 남은 카드: $remaining · 같은 카드는 다시 세지 않습니다";return@launch}
-                        val round=WalletStore.cleanupRound(context)
-                        val pw=pass.toCharArray()
-                        val share=try{withContext(Dispatchers.Default){Crypto.passDec(rec,pw)}}finally{pw.fill('\u0000')}
-                        val after=try{check(share.size==33&&share[0].toInt()==rec.slot.n);withContext(Dispatchers.IO){NfcCards.cleanup(tag,rec,Crypto.sha(snapshot.bytes))}}
-                        finally{share.fill(0)}
-                        check(epoch==sessionEpoch)
-                        WalletStore.markClean(context,id,rec,after,round);cleanedCards=WalletStore.cleanedCards(context);backupVerified=WalletStore.backupVerified(context)
-                        status="${rec.slot.name} 카드 1장 정리 확인 · ${cleanedCards.size}/3 · 남은 카드: ${(setOf("A","B","C")-cleanedCards).sorted().joinToString(" / ")}"
-                        if(backupVerified){lockSecrets();status="새 세대 복구 검증 및 카드 3장 정리 완료 ✓"}
                     } else if(checkingSession&&writeSlot!=null) {
                         val rec=snapshot.latest?:error("현재 세대 카드가 아닙니다")
                         check(rec.version==3&&rec.generation.hex()==WalletStore.generation(context)&&rec.slot.name in cardMarks&&rec.pub.contentEquals(KaspaAddress.mainnetPayload(address))){"이번 등록 세대에 먼저 쓴 카드를 태그하세요"}
@@ -387,18 +375,20 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                             overwritePrompt=OverwritePermit(id,Crypto.sha(snapshot.bytes),writeSlot,android.os.SystemClock.elapsedRealtime(),Crypto.sha(rec.encode()))
                             val old=snapshot.latest
                             val oldWallet=if(old?.pub?.size==32)KaspaAddress.fromPublicKey(old.pub) else "지갑을 식별할 수 없는 기존 데이터"
-                            overwriteDescription="기존 등록: ${old?.slot?.name?:"알 수 없음"} 카드\n$oldWallet\n\n새 등록: 현재 지갑의 ${writeSlot.name} 카드\n\n계속하면 이 카드의 등록 내용이 바뀝니다. 다른 슬롯을 덮어쓰면 같은 슬롯 카드가 중복되어 기존 지갑을 복구하지 못할 수 있습니다. 기존 카드와 비밀번호로 복구 가능한지 먼저 확인하세요."
+                            overwriteDescription="기존 등록: ${old?.slot?.name?:"알 수 없음"} 카드\n$oldWallet\n\n새 등록: 현재 지갑의 ${writeSlot.name} 카드\n\n계속하면 이 카드의 지갑 데이터 영역을 먼저 모두 지운 뒤 새 데이터를 저장합니다. 삭제 후 태그가 끊기거나 저장에 실패하면 이 카드의 기존 데이터는 복구할 수 없습니다. 다른 슬롯을 덮어쓰면 복구에 필요한 카드 수가 부족해질 수 있습니다. 나머지 두 카드와 비밀번호로 기존 지갑을 복구할 수 있는지 확인하세요."
                             overwriteAccepted=false;busy=false;return@launch
                         }
                         overwritePermit=null // one attempt only; failures require another explicit approval.
-                        withContext(Dispatchers.IO){NfcCards.write(tag,rec,Crypto.sha(snapshot.bytes))}
+                        WalletStore.beginCardReplacement(context,id,writeSlot);backupVerified=false;recoveryVerified=false;cleanedCards=WalletStore.cleanedCards(context)
+                        val after=withContext(Dispatchers.IO){NfcCards.write(tag,rec,Crypto.sha(snapshot.bytes))}
                         check(epoch==sessionEpoch){"작업이 잠겼습니다"}
                         val prior=WalletStore.cardOwner(context,id)
                         cardMarks=(cardMarks-prior.orEmpty())+writeSlot.name
                         WalletStore.bindCard(context,id,writeSlot.name);WalletStore.saveCards(context,cardMarks);WalletStore.saveSecureCards(context,cardMarks)
+                        WalletStore.ensureRegistrationRound(context);WalletStore.markClean(context,id,rec,after,WalletStore.cleanupRound(context));cleanedCards=WalletStore.cleanedCards(context)
                         pendingCard=null;pendingUid="";pendingSnapshot=null;target=null
                         status="CARD ${writeSlot.name} 저장 및 검증 완료 ✓"
-                        if(cardMarks.size==3){lockSecrets();status="카드 3장 저장 완료 · 비밀번호를 다시 입력하고 카드 2장으로 복구 검증하세요"}
+                        if(cardMarks.size==3){lockSecrets();status="카드 3장 저장 완료 · 비밀번호를 입력하고 A/B/C 세 장을 모두 검증하세요"}
                     } else if(awaitingSendCard) {
                         awaitingSendCard=false
                         val rec=snapshot.latest?:error("등록된 지갑 카드가 아닙니다")
@@ -457,24 +447,30 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
                                 recoveryPub=rec.pub.copyOf()
                             }
                             check(!found.containsKey(rec.slot)){"같은 슬롯 카드입니다. 서로 다른 카드가 필요합니다"}
+                            if(verifyAllCards)check(id !in foundUids&&WalletStore.cardOwner(context,id)==rec.slot.name){"등록된 서로 다른 A/B/C 카드를 태그하세요"}
+                            foundUids=foundUids+id
                             found=found+(rec.slot to sh.copyOf())
                             val generation=if(rec.version==3)rec.generation.hex() else "legacy"
                             val mixed=foundGeneration!=null&&foundGeneration!=generation
                             if(foundGeneration==null)foundGeneration=generation
                             if(rec.version==3&&generation==WalletStore.generation(context))foundSecure=foundSecure+rec.slot
                             pass=""
-                            status="CARD ${rec.slot.name} 확인 · ${found.size}/2 · 다음 카드의 비밀번호를 입력하세요"+(if(mixed)" · 등록 세대가 다릅니다. 복구는 가능하지만 백업 검증은 완료되지 않습니다" else "")
-                            if(found.size>=2) {
+                            status="CARD ${rec.slot.name} 확인 · ${found.size}/${if(verifyAllCards)3 else 2} · 다음 카드의 비밀번호를 입력하세요"+(if(mixed)" · 등록 세대가 다릅니다. 복구는 가능하지만 백업 검증은 완료되지 않습니다" else "")
+                            if(found.size>=(if(verifyAllCards)3 else 2)) {
+                                val triple=verifyAllCards
+                                if(triple)ThreeCardVerification.validate(found,expected,recoveryPub)
                                 val two=found.values.take(2);val recovered=Shares.join(two[0],two[1])
                                 try {
                                     RecoveryIdentity.validate(recovered,expected,recoveryPub)
                                     saveWallet(recovered);shares.values.forEach{it.fill(0)};shares=Shares.restore(two[0],two[1])
-                                    val incomplete=BackupVerification.incompleteReason(cardMarks,foundSecure)
+                                    val incomplete=if(triple&&cardMarks==setOf("A","B","C")&&foundSecure==Slot.entries.toSet())null else "등록 완료 판정은 현재 세대 A/B/C 세 장 검증이 필요합니다"
                                     if(incomplete==null){WalletStore.verifyBackup(context);recoveryVerified=true;cleanedCards=WalletStore.cleanedCards(context);backupVerified=WalletStore.backupVerified(context)}
                                     found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryMode=false;recoveryPub=null
                                     when {
-                                        incomplete!=null->status="키 복구는 성공했지만 이번 백업 검증은 미완료 · $incomplete"
-                                        else->{if(!keepRecoveryKey)lockSecrets();status="카드 2장 복구 검증 완료 · 이번 정리 확인 0/3 · 마지막 단계: 새 비밀번호를 입력하고 '이전 데이터 정리'에서 A/B/C를 태그하세요"}
+                                        !triple->status="카드 2장으로 지갑 복구 완료 · 등록 완료 검증은 A/B/C 세 장으로 진행하세요"
+                                        incomplete!=null->status="지갑 복구 성공 · 등록 검증은 미완료 · $incomplete"
+                                        backupVerified->{if(!keepRecoveryKey)lockSecrets();status="A/B/C 세 장 등록 검증 및 모든 두 장 조합 복구 검증 완료 ✓"}
+                                        else->{if(!keepRecoveryKey)lockSecrets();status="카드 3장 복구 조합 검증 완료 · 기존 방식의 카드는 잠금 해제 후 A/B/C를 새 등록 방식으로 재등록하세요"}
                                     }
                                     refresh()
                                 } finally {recovered.fill(0)}
@@ -538,7 +534,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             "node" to ("노드 대조" to "송금 입력과 수수료는 REST 및 서로 다른 공개 노드 2곳으로 대조합니다. 실패·불일치 시 서명하지 않습니다. 표시 잔액·과거 내역은 인덱서 조회 정보입니다. 공개 노드 운영자의 독립성은 암호학적으로 증명되지 않습니다."),
             "version" to ("앱 정보" to "Kaspa NFC Wallet\nv${BuildConfig.VERSION_NAME}\nYour Keys on NFC · Secure · Simple · Yours"),
             "licenses" to ("오픈소스 라이선스" to "AndroidX / Jetpack Compose · Apache 2.0\nZXing / ZXing Android Embedded · Apache 2.0\nBouncy Castle · MIT\nlibsecp256k1 · MIT\nOkHttp / Okio · Apache 2.0\nRobolectric (검증 도구) · MIT"),
-            "backup" to ("백업 검증 필요" to "카드 3장 등록·2장 복구 검증·3장 이전 영역 정리를 완료하세요.")
+            "backup" to ("백업 검증 필요" to "카드 3장 초기화·등록과 A/B/C 세 장 검증을 완료하세요.")
         )
         val message=messages[settingDialog]
         AlertDialog(onDismissRequest={settingDialog=""},title={Text(if(settingDialog=="currency")"표시 통화" else message?.first?:"안내")},
@@ -554,7 +550,7 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
         address=address,balance=balance,tab=tab,page=page,to=if(page=="Confirm")prepared?.let{KaspaAddress.fromPublicKey(it.tx.outputs[0].script.copyOfRange(1,33))}?:sendTo else sendTo,amount=if(page=="Confirm")prepared?.let{java.math.BigDecimal.valueOf(it.tx.outputs[0].amount,8).toPlainString()}?:sendAmount else sendAmount,fee=displayedFee,
         txid=resultTx,sentAt=sentAt,cards=cardMarks,dates=dates,history=history,historyLoading=historyLoading,historyError=historyError,historyMore=historyMore,status=status,sendInfo=sendInfo,
         busy=busy||cardPreparing,refreshing=refreshing,awaiting=awaitingSendCard,recovery=recoveryMode,target=target?.name,
-        unlocked=secret!=null,captureAllowed=captureAllowed,password=pass,passwordConfirm=passConfirm,newPassword=newPass,newPasswordConfirm=newPassConfirm,passwordFrozen=provisioningPass!=null,recoveryAddress=recoveryAddress,backupVerified=backupVerified,pending=WalletStore.pending(context)!=null,cleaning=cleaning,resumingRegistration=resumingRegistration,resumeAvailable=RegistrationResume.available(WalletStore.generation(context),cardMarks,recoveryVerified),recoveryVerified=recoveryVerified,cleanedCards=cleanedCards,addressValid=runCatching{KaspaAddress.recipientPayload(sendTo)}.isSuccess,relayFloor=prepared?.relayFloor?:false,confirmationOpen=overwritePrompt!=null,currency=currency,krw=quote?.krw,usd=quote?.usd,change=quote?.change
+        unlocked=secret!=null,captureAllowed=captureAllowed,password=pass,passwordConfirm=passConfirm,newPassword=newPass,newPasswordConfirm=newPassConfirm,passwordFrozen=provisioningPass!=null,recoveryAddress=recoveryAddress,backupVerified=backupVerified,pending=WalletStore.pending(context)!=null,cleaning=cleaning,resumingRegistration=resumingRegistration,resumeAvailable=RegistrationResume.available(WalletStore.generation(context),cardMarks,recoveryVerified),recoveryVerified=recoveryVerified,verifyAllCards=verifyAllCards,cleanedCards=cleanedCards,addressValid=runCatching{KaspaAddress.recipientPayload(sendTo)}.isSuccess,relayFloor=prepared?.relayFloor?:false,confirmationOpen=overwritePrompt!=null,currency=currency,krw=quote?.krw,usd=quote?.usd,change=quote?.change
     ),DesignActions(
         navigate={if(!busy&&!awaitingSendCard&&target==null&&!recoveryMode&&!cleaning&&!resumingRegistration&&!cardPreparing){tab=it;page="";if(it=="Transactions")refreshHistory()}},
         route={next->if(!busy&&!awaitingSendCard){
@@ -581,11 +577,11 @@ internal fun qr(text:String):Bitmap{val m=QRCodeWriter().encode(text,BarcodeForm
             scope.launch{try{val p=KaspaTransaction.prepareMaximum(requestedFrom,requestedTo);check(revision==inputRevision&&address==requestedFrom&&sendTo==requestedTo){"입력이 변경되었습니다"};sendAmount=java.math.BigDecimal.valueOf(p.tx.outputs.first().amount,8).stripTrailingZeros().toPlainString();sendAll=true;displayedFee=p.fee;prepared=p;sendInfo="수수료를 제외한 최대 수량입니다"}catch(e:Exception){sendInfo="계산 실패 · ${e.message}"}finally{busy=false}}
         }},
         resumeRegistration={if(!busy&&secret==null&&pass.length>=8&&RegistrationResume.available(WalletStore.generation(context),cardMarks,recoveryVerified)){resumingRegistration=true;status="이번 세대에 등록한 카드 1장을 태그한 뒤 지문 인증하세요. 등록에 사용한 비밀번호가 필요합니다"}},
-        cleanup={if(!busy&&pass.isNotBlank()&&WalletStore.recoveryVerified(context)){WalletStore.startCleanup(context);cleanedCards=WalletStore.cleanedCards(context);cleaning=true;status="A/B/C를 각각 태그하세요 · 같은 카드는 한 번만 확인합니다"}},
+        cleanup={status="카드 초기화는 덮어쓰기 경고에 동의한 등록 과정에서 자동 진행됩니다"},
         restartProvision={if(secret!=null&&!busy){provisioningPass?.fill('\u0000');provisioningPass=null;WalletStore.beginProvision(context);cardMarks=emptySet();recoveryVerified=false;backupVerified=false;cleanedCards=emptySet();status="새 등록 세대를 시작했습니다. 새 비밀번호를 입력하세요. 이전 카드와 비밀번호는 복구 완료까지 보관하세요"}},
         generatePassword={if(!busy&&provisioningPass==null){val generated=PasswordPolicy.generate();if(address.isBlank()){pass=generated;passConfirm=""}else{newPass=generated;newPassConfirm=""};showGenerated=true}},password={if(!busy&&provisioningPass==null)pass=it},passwordConfirm={passConfirm=it},newPassword={if(provisioningPass==null)newPass=it},newPasswordConfirm={if(provisioningPass==null)newPassConfirm=it},recoveryAddress={recoveryAddress=it},
         create={if(BuildConfig.DEBUG){status="디버그 빌드에서는 실제 메인넷 지갑을 만들 수 없습니다"}else if(PasswordPolicy.valid(pass)&&pass==passConfirm){var key:ByteArray?=null;try{val fresh=KaspaAddress.newPrivateKey();key=fresh;saveWallet(fresh);shares=Shares.split(fresh);provisioningPass=pass.toCharArray();WalletStore.beginProvision(context);cardMarks=emptySet();backupVerified=false;recoveryVerified=false;cleanedCards=emptySet();status="지갑 생성 완료 · 카드 A/B/C 등록 후 복구 검증하세요";tab="Cards"}catch(e:Exception){status="처리 실패 · ${e.message}"}finally{key?.fill(0)}}else status="처리 실패 · 비밀번호 강도와 재입력을 확인하세요"},
-        recover={keepRecoveryKey=cardMarks.size<3;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status="서로 다른 등록 카드 2장을 태그하세요"},unlock={keepRecoveryKey=true;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status="카드 교체를 위해 카드 2장으로 잠금을 해제하세요"},register={prepareCard(it)},
+        recover={verifyAllCards=cardMarks.size==3;foundUids=emptySet();if(verifyAllCards){WalletStore.invalidateVerification(context);recoveryVerified=false;backupVerified=false};keepRecoveryKey=cardMarks.size<3;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status=if(verifyAllCards)"A/B/C 세 장을 모두 태그하세요 · 모든 두 장 조합의 복구를 확인합니다" else "서로 다른 카드 두 장으로 지갑을 복구하세요"},unlock={verifyAllCards=false;foundUids=emptySet();keepRecoveryKey=true;foundGeneration=null;recoveryMode=true;found.values.forEach{it.fill(0)};found=emptyMap();foundSecure=emptySet();recoveryPub=null;status="카드 교체를 위해 카드 2장으로 잠금을 해제하세요"},register={prepareCard(it)},
         explorer={id->if(Regex("[0-9a-fA-F]{64}").matches(id))runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("${KaspaNetwork.EXPLORER}/txs/$id"))) }},
         setting={id->when(id){
             "capture"->{captureAllowed=!captureAllowed;ScreenCapturePolicy.apply((context as android.app.Activity).window,captureAllowed,showGenerated);status=if(captureAllowed)"문제 확인용 화면 캡처 허용 · 앱을 벗어나면 다시 차단됩니다" else "화면 캡처를 차단했습니다"}
