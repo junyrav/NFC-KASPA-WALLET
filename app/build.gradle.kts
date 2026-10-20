@@ -14,8 +14,8 @@ android {
         applicationId = "com.nfckaspa.wallet"
         minSdk = 28
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.11.1-mainnet"
+        versionCode = 29
+        versionName = "0.11.2-mainnet"
         resValue("string", "app_name", "Kaspa NFC Wallet")
     }
 

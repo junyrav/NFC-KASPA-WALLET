@@ -19,11 +19,12 @@ class SecurityRegressionTest {
         assertEquals(-1,spec.userAuthenticationValidityDurationSeconds)
     }
     @Test fun backupGateRequiresThreeSecureCardsAndIndependentRecoveryVerification() {
+        WalletStore.saveAddress(c,KaspaAddress.mainnet(ByteArray(32).apply{this[31]=1}));WalletStore.beginProvision(c)
         WalletStore.saveCards(c,setOf("A","B","C"));assertFalse(WalletStore.backupVerified(c))
         WalletStore.saveSecureCards(c,setOf("A","B"));assertThrows(IllegalStateException::class.java){WalletStore.verifyBackup(c)}
         WalletStore.saveSecureCards(c,setOf("A","B","C"));assertFalse(WalletStore.backupVerified(c))
         WalletStore.verifyBackup(c);assertFalse(WalletStore.backupVerified(c))
-        listOf("A","B","C").forEach{WalletStore.markClean(c,it)};assertTrue(WalletStore.backupVerified(c))
+        listOf("A","B","C").forEach{TestCleanup.mark(c,Slot.valueOf(it))};assertTrue(WalletStore.backupVerified(c))
         WalletStore.beginProvision(c);assertFalse(WalletStore.backupVerified(c))
     }
     @Test fun uncertainPaymentPersistsAndCannotBeReplacedByNewPayment() {

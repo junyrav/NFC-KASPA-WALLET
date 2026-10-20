@@ -160,6 +160,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         text={Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Icon(Icons.Outlined.Nfc,null,Modifier.size(52.dp),tint=Teal)
             Text(s.status,fontSize=14.sp)
+            if(s.cleaning)Text(Slot.entries.joinToString(" · "){"${it.name}: "+if(it.name in s.cleanedCards)"확인됨" else "대기"},fontSize=13.sp,color=Teal)
             if(s.recovery||s.cleaning||s.resumingRegistration)OutlinedTextField(s.password,a.password,label={Text("태그할 카드의 복구 비밀번호")},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,autoCorrectEnabled=false),enabled=!s.busy,singleLine=true)
             if(s.busy){LinearProgressIndicator(Modifier.fillMaxWidth(),color=Teal);Text("카드를 움직이지 마세요 · 최대 5회 자동 재시도",fontSize=12.sp,color=Muted)}
             else Text("휴대폰의 NFC 위치에 카드를 가까이 대세요.",fontSize=12.sp,color=Muted)
@@ -425,7 +426,7 @@ private fun total(s:WalletVisualState):String = runCatching {
         Slot.entries.forEach {slot->
             Row(Modifier.fillMaxWidth().border(1.dp,Line,RoundedCornerShape(12.dp)).padding(13.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Outlined.CreditCard,null,tint=Teal,modifier=Modifier.size(28.dp))
-                Column(Modifier.weight(1f)){Text("${slot.name} 카드",fontWeight=FontWeight.SemiBold,color=Ink);Text(if(slot.name in s.cards)"등록됨 · ${s.dates[slot.name]?:"등록 확인"}" else "미등록",fontSize=11.sp,color=Muted)}
+                Column(Modifier.weight(1f)){Text("${slot.name} 카드",fontWeight=FontWeight.SemiBold,color=Ink);Text(if(slot.name in s.cards)"등록됨 · ${s.dates[slot.name]?:"등록 확인"}" else "미등록",fontSize=11.sp,color=Muted);if(s.recoveryVerified)Text(if(slot.name in s.cleanedCards)"이전 영역 정리: 확인됨" else "이전 영역 정리: 미확인",fontSize=11.sp,color=if(slot.name in s.cleanedCards)Teal else Muted)}
                 OutlinedButton(onClick={a.register(slot)},enabled=s.unlocked&&!s.busy&&!s.recovery&&s.target==null,contentPadding=PaddingValues(horizontal=12.dp)){Text(if(slot.name in s.cards)"재등록" else "등록",fontSize=12.sp)}
             }
         }

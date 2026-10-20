@@ -22,14 +22,41 @@ internal object WalletStore {
     }
     fun generation(c:Context)=prefs(c).getString("registration_generation_v3","").orEmpty()
     fun secureCards(c:Context)=prefs(c).getStringSet("secure_cards_v3",emptySet()).orEmpty().toSet()
-    fun saveSecureCards(c:Context,cards:Set<String>){check(prefs(c).edit().putStringSet("secure_cards_v3",cards).putBoolean("recovery_verified_v3",false).putStringSet("cleaned_cards_v3",emptySet()).commit())}
+    fun saveSecureCards(c:Context,cards:Set<String>){check(prefs(c).edit().putStringSet("secure_cards_v3",cards).putBoolean("recovery_verified_v3",false).putStringSet("cleaned_cards_v3",emptySet()).remove("cleanup_receipts_v4").remove("cleanup_round_v4").commit())}
     fun beginProvision(c:Context){check(prefs(c).edit().putString("registration_generation_v3",java.util.UUID.randomUUID().toString().replace("-",""))
-        .putStringSet("secure_cards_v3",emptySet()).putBoolean("recovery_verified_v3",false).putStringSet("cleaned_cards_v3",emptySet()).commit())}
+        .putStringSet("secure_cards_v3",emptySet()).putBoolean("recovery_verified_v3",false).putStringSet("cleaned_cards_v3",emptySet()).remove("cleanup_receipts_v4").remove("cleanup_round_v4").commit())}
     fun recoveryVerified(c:Context)=prefs(c).getBoolean("recovery_verified_v3",false)&&secureCards(c).size==3
-    fun cleanedCards(c:Context)=prefs(c).getStringSet("cleaned_cards_v3",emptySet()).orEmpty().toSet()
-    fun backupVerified(c:Context)=recoveryVerified(c)&&cleanedCards(c).containsAll(setOf("A","B","C"))
-    fun verifyBackup(c:Context){check(secureCards(c).size==3);check(prefs(c).edit().putBoolean("recovery_verified_v3",true).commit())}
-    fun markClean(c:Context,slot:String){check(recoveryVerified(c));check(prefs(c).edit().putStringSet("cleaned_cards_v3",cleanedCards(c)+slot).commit())}
+    fun cleanupRound(c:Context)=prefs(c).getString("cleanup_round_v4","").orEmpty()
+    private fun cleanupReceipts(c:Context)=runCatching{JSONObject(prefs(c).getString("cleanup_receipts_v4","{}"))}.getOrElse{JSONObject()}
+    fun cleanedCards(c:Context):Set<String> {
+        if(!recoveryVerified(c)||cleanupRound(c).isBlank())return emptySet()
+        val receipts=cleanupReceipts(c);val valid=mutableMapOf<String,String>()
+        for(slot in listOf("A","B","C"))runCatching {
+            val row=receipts.getJSONObject(slot);val uid=row.getString("uid")
+            check(uid.isNotBlank()&&row.getString("round")==cleanupRound(c)&&row.getString("generation")==generation(c)&&row.getString("wallet")==loadAddress(c))
+            check(cardOwner(c,uid)==slot&&row.getLong("sequence")>0&&row.getString("recordDigest").matches(Regex("[0-9a-f]{64}")))
+            valid[slot]=uid
+        }
+        return if(valid.values.toSet().size==valid.size)valid.keys.toSet() else emptySet()
+    }
+    fun backupVerified(c:Context)=recoveryVerified(c)&&cleanedCards(c)==setOf("A","B","C")
+    fun verifyBackup(c:Context){check(secureCards(c)==setOf("A","B","C"));check(prefs(c).edit().putBoolean("recovery_verified_v3",true)
+        .putString("cleanup_round_v4",java.util.UUID.randomUUID().toString()).remove("cleanup_receipts_v4").remove("cleaned_cards_v3").commit())}
+    fun startCleanup(c:Context) {
+        check(recoveryVerified(c))
+        if(cleanupRound(c).isBlank())check(prefs(c).edit().putString("cleanup_round_v4",java.util.UUID.randomUUID().toString()).remove("cleanup_receipts_v4").remove("cleaned_cards_v3").commit())
+    }
+    fun markClean(c:Context,uid:String,record:CardRecord,after:CardSnapshot,round:String) {
+        check(recoveryVerified(c)&&round.isNotBlank()&&round==cleanupRound(c)){"정리 검증 회차가 변경되었습니다. 다시 태그하세요"}
+        check(record.version==3&&record.generation.hex()==generation(c)&&record.pub.contentEquals(KaspaAddress.mainnetPayload(loadAddress(c))))
+        check(uid.matches(Regex("[0-9a-f]+"))&&cardOwner(c,uid)==record.slot.name){"등록된 원래 카드가 아닙니다"}
+        check(after.first.size==288&&after.second.size==288&&after.latest?.encode()?.contentEquals(record.encode())==true&&listOf(after.first,after.second)[1-after.activeBank()].all{it==0.toByte()}){"카드의 이전 영역 정리 결과를 확인할 수 없습니다"}
+        val rows=cleanupReceipts(c)
+        for(other in Slot.entries)if(other!=record.slot)check(rows.optJSONObject(other.name)?.optString("uid")!=uid){"같은 카드는 다른 슬롯의 확인으로 사용할 수 없습니다"}
+        rows.put(record.slot.name,JSONObject().put("uid",uid).put("round",round).put("generation",generation(c)).put("wallet",loadAddress(c))
+            .put("sequence",record.sequence).put("recordDigest",Crypto.sha(record.encode()).hex()))
+        check(prefs(c).edit().putString("cleanup_receipts_v4",rows.toString()).commit())
+    }
     data class Pending(val wallet:String,val txid:String,val request:String,val to:String,val amount:String,val fee:Long,val time:Long)
     private fun pendingFile(c:Context)=android.util.AtomicFile(java.io.File(c.filesDir,"pending-payment-v3.json"))
     private fun envelope(raw:String)=JSONObject().put("payload",raw).put("sha256",Crypto.sha(raw.toByteArray(Charsets.UTF_8)).hex()).toString()

@@ -52,7 +52,7 @@ class PendingRecoveryTest {
         WalletStore.beginProvision(c);val generation=WalletStore.generation(c)
         WalletStore.saveSecureCards(c,setOf("A","B","C"));WalletStore.verifyBackup(c)
         assertTrue(WalletStore.recoveryVerified(c));assertFalse(WalletStore.backupVerified(c))
-        listOf("A","B","C").forEach{WalletStore.markClean(c,it)};assertTrue(WalletStore.backupVerified(c))
+        listOf("A","B","C").forEach{TestCleanup.mark(c,Slot.valueOf(it))};assertTrue(WalletStore.backupVerified(c))
         WalletStore.beginProvision(c);assertNotEquals(generation,WalletStore.generation(c));assertFalse(WalletStore.backupVerified(c))
     }
 }

@@ -1,4 +1,4 @@
-# Security review follow-up: 0.11.1-mainnet
+# Security review follow-up: 0.11.2-mainnet
 
 This document supersedes the 0.9.x behavior descriptions. Baseline reviewed by the external auditor: `acdd1c44230826d42c0cb213cc326ae898dba25c`. This is an implementation response, not an independent security certification. Review the final commit and CI results together.
 
@@ -80,3 +80,10 @@ The UI distinguishes registration, two-card recovery verification, and three-car
 - Corrects fee preparation failing with `No value for version` on funded wallets. The REST UTXO model omits script version (native P2PK version zero) and serializes amount/DAA as decimal strings. The previous live check used an empty address, so it did not exercise any UTXO rows.
 - Only a missing REST script version defaults to zero. Explicit null, unsupported versions, malformed decimal strings, floats, signs and overflow still fail. wRPC integer parsing remains strict. The reconstructed wallet script and all normalized UTXO fields must still match both nodes; no source or signing check is bypassed.
 - Regression tests cover the real REST shape and both numeric encodings, malformed values, explicit invalid versions and foreign scripts. A mandatory read-only populated-address check compares an actual REST UTXO against both nodes, in addition to the empty-address quorum smoke test. It uses only public documentation/block addresses and never signs, broadcasts or tags a card.
+
+## 0.11.2 cleanup evidence and recovery-round freshness
+
+- The reported full-completion message came from the recovery flow reading an already persisted cleanup flag, rather than newly checking three cards in that attempt. Repeated A tags do not create B/C set entries in the previous implementation; the precise physical sequence is not reproducible remotely. This update removes reliance on the old slot-only completion flags and makes a new successful recovery verification begin a fresh cleanup round.
+- Cleanup completion now records public evidence bound to the wallet, registration generation, verification round, authenticated record digest/sequence, card slot and registered UID. A full inactive-bank zero read-back and unchanged active-record read-back are required before a receipt is committed. Three distinct registered UID receipts are required. Failed cleanup, stale in-flight round evidence, damaged receipts and wrong-generation cards cannot advance the gate. UID distinction is not anti-cloning hardware authentication.
+- Repeated already-confirmed cards are explicitly rejected as progress; the UI shows A/B/C separately and names remaining cards. Partial progress can resume in the same round after RF interruption, cancellation, backgrounding or restart. A new successful two-card recovery check intentionally resets cleanup evidence for that new round.
+- On upgrade, legacy cleanup completion flags are not accepted as receipts. Existing key/card/password formats are unchanged and no card re-registration is required, but all three cards must be tagged again in cleanup before Send/Receive is enabled. Existing two-card recovery verification is retained. The active card bank is never deliberately erased. No physical NFC operation or funded transaction was performed by the agent.

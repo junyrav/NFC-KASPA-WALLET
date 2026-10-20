@@ -25,8 +25,9 @@ class WalletUiTest {
     @Test fun savedWalletReloadsAcrossActivityRecreationAndTabsWork() {
         val c=RuntimeEnvironment.getApplication()
         WalletStore.saveAddress(c,KaspaAddress.mainnet(KaspaAddress.newPrivateKey()))
+        WalletStore.beginProvision(c)
         WalletStore.saveCards(c,setOf("A","B","C"))
-        WalletStore.saveSecureCards(c,setOf("A","B","C"));WalletStore.verifyBackup(c);listOf("A","B","C").forEach{WalletStore.markClean(c,it)}
+        WalletStore.saveSecureCards(c,setOf("A","B","C"));WalletStore.verifyBackup(c);listOf("A","B","C").forEach{TestCleanup.mark(c,Slot.valueOf(it))}
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             compose.onNodeWithText("내 지갑 잔액").assertIsDisplayed()
             compose.onNodeWithText("지갑 시작하기").assertDoesNotExist()

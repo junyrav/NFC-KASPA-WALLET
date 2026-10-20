@@ -70,12 +70,14 @@ internal object CardJournal {
 
 /** Only an authenticated, currently verified generation can authorize deletion of the inactive bank. */
 internal object CardCleanup {
-    fun erase(snapshot:CardSnapshot,record:CardRecord,write:(Int,Int,ByteArray)->Unit,read:(Int)->ByteArray) {
+    fun erase(snapshot:CardSnapshot,record:CardRecord,write:(Int,Int,ByteArray)->Unit,read:(Int)->ByteArray):CardSnapshot {
         require(record.version==3&&snapshot.latest?.encode()?.contentEquals(record.encode())==true)
         val active=snapshot.activeBank();val inactive=1-active
         for(i in 0 until 18)write(inactive,i,ByteArray(16))
-        check(read(inactive).all{it==0.toByte()}){"이전 영역 삭제를 확인하지 못했습니다. 같은 카드를 다시 태그하세요"}
-        check(read(active).contentEquals(record.encode())){"현재 영역 검증 실패"}
+        val cleared=read(inactive);val retained=read(active)
+        check(cleared.size==288&&cleared.all{it==0.toByte()}){"이전 영역 삭제를 확인하지 못했습니다. 같은 카드를 다시 태그하세요"}
+        check(retained.contentEquals(record.encode())){"현재 영역 검증 실패"}
+        return if(active==0)CardSnapshot(retained,cleared) else CardSnapshot(cleared,retained)
     }
 }
 
